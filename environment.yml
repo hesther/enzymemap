@@ -1,0 +1,22 @@
+name: enzymemap
+
+channels:
+  - conda-forge
+  - rdkit
+
+dependencies:
+  - python=3.9
+  - numpy
+  - pip
+  - rdkit
+  - pandas=2
+  - joblib
+  - jupyter
+  - lxml
+  - tqdm
+  - scikit-learn
+  - pip:
+     - git+https://github.com/hesther/rdchiral.git
+     - git+https://github.com/hesther/templatecorr.git
+     - wrapt_timeout_decorator
+     - timeout_decorator
