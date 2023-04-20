@@ -654,7 +654,7 @@ def standardize_compound_df(compound_df):
     return compound_df
 
 def manual_corrections_compounds(compound_df):
-     """manual_corrections_compounds.
+    """manual_corrections_compounds.
 
     Manual corrections of compounds that are wrong in BRENDA.
 
