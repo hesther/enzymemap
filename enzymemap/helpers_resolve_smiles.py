@@ -600,7 +600,7 @@ def resolve_all(compound_df, file_loc_inchi, file_loc_chebi):
     return compound_df
 
 def standardize_compound_df(compound_df):
-     """standardize_compound_df.
+    """standardize_compound_df.
 
     Standardize SMILES strings
 
