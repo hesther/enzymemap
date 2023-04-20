@@ -8,6 +8,10 @@ dependencies:
     # Base depends
   - python
   - pip
+  - numpy
+  - rdkit
+  - pandas
+  - lxml
 
     # Testing
   - pytest
@@ -15,6 +19,10 @@ dependencies:
   - codecov
 
     # Pip-only installs
-  #- pip:
+  - pip:
   #  - codecov
+    - git+https://github.com/hesther/rdchiral.git
+    - git+https://github.com/hesther/templatecorr.git
+    - wrapt_timeout_decorator
+    - timeout_decorator
 
