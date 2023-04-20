@@ -40,7 +40,7 @@ Extract BRENDA in the data folder (run `tar -xzvf brenda_2023_1.txt.tar.gz` in t
 Go to the scripts folder and run
 
 ```
-python make_inital.py
+python make_raw.py
 ```
 
 to produce `data/raw_reactions.csv`, `data/compound_to_smiles.json` and `ec_nums.csv`. This step processes BRENDA entries and resolves all trivial names to SMILES. You might need to download a new opsin.jar from the internet that is suitable for your system. We also provide the three processed files, so you can continue with the following steps without running `make_inital.py`
