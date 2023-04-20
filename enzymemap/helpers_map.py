@@ -10,6 +10,19 @@ from rdchiral.template_extractor import extract_from_reaction
 from rdchiral.main import rdchiralRun, rdchiralReaction, rdchiralReactants
 import pandas as pd
 
+class Reaction():
+    """
+    helper class for reaction rules
+    """
+    def __init__(self, reaction_smarts):
+        self.rxn = AllChem.ReactionFromSmarts(reaction_smarts)
+        mapNoToReactant = {}
+        for i,reactant in enumerate(self.rxn.GetReactants()):
+            for atom in reactant.GetAtoms():
+                if atom.HasProp('molAtomMapNumber'):
+                    mapNoToReactant[atom.GetIntProp('molAtomMapNumber')] = (i,atom.GetIdx())     
+        self.mapNoToReactant = mapNoToReactant
+        
 def delete_dupl(reac, prod):
     """delete_dupl.
 
