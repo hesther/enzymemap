@@ -23,6 +23,18 @@ class Reaction():
                     mapNoToReactant[atom.GetIntProp('molAtomMapNumber')] = (i,atom.GetIdx())     
         self.mapNoToReactant = mapNoToReactant
         
+class Reactants_old():
+    def __init__(self,smi,remap=True):
+        self.reactants = [Chem.MolFromSmiles(x) for x in smi.split('.')]
+        if remap:
+            n=0
+            for reac in self.reactants:
+                [a.SetAtomMapNum(a.GetIdx()+1001+n) for a in reac.GetAtoms()]
+                n+=reac.GetNumAtoms() 
+        else:
+            for reac in self.reactants:
+                [a.SetAtomMapNum(a.GetAtomMapNum()+1000) for a in reac.GetAtoms()]
+                
 def delete_dupl(reac, prod):
     """delete_dupl.
 
