@@ -42,11 +42,16 @@ def make_initial(file_loc, file_loc_inchi, file_loc_chebi, manual_corrections=Fa
     reduced_to_oxidized, oxidized_to_reduced = helpers_rdkit.get_strip_list(compound_to_smiles)
     
     # Correct and balance reactions
+    cached=dict()
     print("Correcting and balancing")
     balanced_rxn_list = []
     for i in df.index:
         print(i,end='\r')
-        rxns = helpers_rdkit.correct_reaction(df['POSSIBLE_RXNS'][i], df['RXN_TEXT'][i], reduced_to_oxidized, oxidized_to_reduced)
+        if df['RXN_TEXT'][i] not in cached:
+            rxns = helpers_rdkit.correct_reaction(df['POSSIBLE_RXNS'][i], df['RXN_TEXT'][i], reduced_to_oxidized, oxidized_to_reduced)
+            cached[df['RXN_TEXT'][i]]=rxns
+        else:
+            rxns = cached[df['RXN_TEXT'][i]]
         balanced_rxn_list.append(rxns)
     df['BALANCED_RXNS'] = balanced_rxn_list
 
@@ -70,8 +75,8 @@ def map_group(df, db_rules):
 
     groups = helpers_map.get_groups(db_rules)
 
-    df = df[['POSSIBLE_RXNS','RXN_TEXT','REVERSIBLE','BALANCED_RXNS']].copy()
-    df.columns = ['uncorrected_rxns', 'rxn_text', 'reversible','balanced_rxns']
+    df = df[['POSSIBLE_RXNS','ORIG_RXN_TEXT','REVERSIBLE','BALANCED_RXNS','NATURAL','ORGANISM','PROTEIN_REFS','PROTEIN_DB']].copy()
+    df.columns = ['uncorrected_rxns', 'rxn_text', 'reversible','balanced_rxns','natural','organism','protein_refs','protein_db']
     df['source'] = None
     df['step'] = None
     df['mapped_rxns'] = [[] for _ in range(len(df))]
@@ -87,12 +92,12 @@ def map_group(df, db_rules):
         if len(df['balanced_rxns'][i]) > 0:
             rxns, rules, rule_ids, indis = helpers_map.map(df['balanced_rxns'][i], db_rules, single=True)
             if len(rxns) > 0:
-                df['source'][i] = 'direct'
-                df['step'][i] = 'single'
-                df['mapped_rxns'][i] = rxns
-                df['rules'][i] = rules
-                df['rule_ids'][i] = rule_ids
-                df['individuals'][i] = indis
+                df.loc[i, 'source'] = 'direct'
+                df.loc[i, 'step'] = 'single'
+                df.loc[i, 'mapped_rxns'] = rxns
+                df.loc[i, 'rules'] = rules
+                df.loc[i, 'rule_ids'] = rule_ids
+                df.loc[i, 'individuals'] = indis
 
     # Try multi step map with corrected stereochem on balanced reactions
     print("Mapping multi steps")
@@ -105,12 +110,12 @@ def map_group(df, db_rules):
             else:
                 rxns, rules, rule_ids, indis = helpers_map.map(df['balanced_rxns'][i], db_rules.loc[rule_ids_in_ec], single=False)
             if len(rxns) > 0:
-                df['source'][i] = 'direct'
-                df['step'][i] = 'multi'
-                df['mapped_rxns'][i] = rxns
-                df['rules'][i] = rules
-                df['rule_ids'][i] = rule_ids
-                df['individuals'][i] = indis
+                df.loc[i, 'source'] = 'direct'
+                df.loc[i, 'step'] = 'multi'
+                df.loc[i, 'mapped_rxns'] = rxns
+                df.loc[i, 'rules'] = rules
+                df.loc[i, 'rule_ids'] = rule_ids
+                df.loc[i, 'individuals'] = indis
             
     # Suggest for unbalanced or unmapped
     print("Suggesting reactions")
@@ -128,23 +133,22 @@ def map_group(df, db_rules):
                 if len(rxns) > 0:
                     rxns, rules, rule_ids, indis = helpers_map.map(rxns, db_rules.loc[rule_ids_in_ec], single=True)
                     if len(rxns) > 0:
-                        df['source'][i] = 'suggested'
-                        df['step'][i] = 'single'
-                        df['mapped_rxns'][i] = rxns
-                        df['rules'][i] = rules
-                        df['rule_ids'][i] = rule_ids
-                        df['individuals'][i] = indis
+                        df.loc[i, 'source'] = 'suggested'
+                        df.loc[i, 'step'] = 'single'
+                        df.loc[i, 'mapped_rxns'] = rxns
+                        df.loc[i, 'rules'] = rules
+                        df.loc[i, 'rule_ids'] = rule_ids
+                        df.loc[i, 'individuals'] = indis
 
     # If multiple options: select best bond_edits
     print("Per entry, select best option")
     for i in df.index:
         print(i,end='\r')
         if len(df['mapped_rxns'][i]) > 0:
-            df['mapped_rxns'][i], df['rules'][i], df['rule_ids'][i], df['individuals'][i] = helpers_rdkit.select_best(df['mapped_rxns'][i], df['rules'][i], df['rule_ids'][i], df['individuals'][i])
+            df.loc[i, 'mapped_rxns'], df.loc[i, 'rules'], df.loc[i, 'rule_ids'], df.loc[i, 'individuals'] = helpers_rdkit.select_best(df['mapped_rxns'][i], df['rules'][i], df['rule_ids'][i], df['individuals'][i])
             
     # Judge quality based on rule frequency
     print("Judging quality of reaction")
-    df['quality']=None
     l = [item for sublist in df['rule_ids'].values for item in sublist if item != None]
     counts={}
     for group in groups:
@@ -155,8 +159,7 @@ def map_group(df, db_rules):
         if count != 0:
             for x in group:
                 counts[x] = count/len(l)
-    for i in df.index:
-        df['quality'][i] = [counts[r] for r in df['rule_ids'][i]]    
+    df['quality'] = [[counts[r] for r in df['rule_ids'][i]] for i in df.index]
     
     # Add reverse reactions for reversible cases and split into individual entries
     print("Adding reversible reactions")

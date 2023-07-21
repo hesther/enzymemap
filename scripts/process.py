@@ -8,7 +8,7 @@ import sys
 ec_num = sys.argv[1]
 
 df=pd.read_csv("../data/raw_reactions.csv")
-for s in ['SUBSTRATES', 'PRODUCTS', 'POSSIBLE_RXNS', 'BALANCED_RXNS']:
+for s in ['SUBSTRATES', 'PRODUCTS', 'POSSIBLE_RXNS', 'BALANCED_RXNS', 'PROTEIN_REFS']:
     df[s] = [ast.literal_eval(x) for x in df[s]]
 
 rules = pd.read_pickle('../data/rules.pkl')

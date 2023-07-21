@@ -22,7 +22,7 @@ class Reaction():
                 if atom.HasProp('molAtomMapNumber'):
                     mapNoToReactant[atom.GetIntProp('molAtomMapNumber')] = (i,atom.GetIdx())     
         self.mapNoToReactant = mapNoToReactant
-        
+
 class Reactants_old():
     def __init__(self,smi,remap=True):
         self.reactants = [Chem.MolFromSmiles(x) for x in smi.split('.')]
@@ -651,21 +651,32 @@ def map(rxns, rules, single=True):
     rls=[]
     iis=[]
     indis=[]
+    cached=dict()
     for rxn in rxns:
-        reacs, _, prods = rxn.split(">")
+        if rxn not in cached.keys():
+            reacs, _, prods = rxn.split(">")
 
-        if single:
-            try:
-                result, rule, idx = get_mapped_reacs(reacs, prods, rules)
-            except:
-                result = None
-            indi = None
+            if single:
+                try:
+                    result, rule, idx = get_mapped_reacs(reacs, prods, rules)
+                except:
+                    result = None
+                    rule = None
+                    idx = None
+                indi = None
+            else:
+                try:
+                    result, rule, idx, indi = get_mapped_reacs_multi(reacs, prods, rules)
+                except:
+                    result = None
+                    rule = None
+                    idx = None
+                    indi = None
+
+            cached[rxn]=(result, rule, idx, indi)
         else:
-            try:
-                result, rule, idx, indi = get_mapped_reacs_multi(reacs, prods, rules)
-            except:
-                result = None
-
+            result, rule, idx, indi = cached[rxn]
+            
         if not result:
             continue
 
@@ -901,6 +912,10 @@ def make_final(df):
     source = []
     quality = []
     rxn_idx = []
+    natural = []
+    organism = []
+    protein_refs = []
+    protein_db = []
 
     for i in df.index:
         print(i,end='\r')
@@ -915,6 +930,10 @@ def make_final(df):
             quality.append(df['quality'][i][j])
             source.append(df['source'][i])
             steps.append(df['step'][i])
+            natural.append(df['natural'][i])
+            organism.append(df['organism'][i])
+            protein_refs.append(df['protein_refs'][i])
+            protein_db.append(df['protein_db'][i])
         
             if df['prob_rev'][i][j]=='r' or df['prob_rev'][i][j]=='p_r':
                 rxn_idx.append(i)
@@ -930,7 +949,11 @@ def make_final(df):
                 else:
                     source.append(df['source'][i]+' reversed_suggested')
                 steps.append(df['step'][i])
-
+                natural.append(df['natural'][i])
+                organism.append(df['organism'][i])
+                protein_refs.append(df['protein_refs'][i])
+                protein_db.append(df['protein_db'][i])
+            
             if df['step'][i] == 'multi':
                 # also add individuals
                 for result in df['individuals'][i][j]:
@@ -943,6 +966,10 @@ def make_final(df):
                     quality.append(df['quality'][i][j])
                     source.append(df['source'][i])
                     steps.append("single from multi")
+                    natural.append(df['natural'][i])
+                    organism.append(df['organism'][i])
+                    protein_refs.append(df['protein_refs'][i])
+                    protein_db.append(df['protein_db'][i])
                 
                     if df['prob_rev'][i][j]=='r' or df['prob_rev'][i][j]=='p_r':
                         rxn_idx.append(i)
@@ -958,16 +985,27 @@ def make_final(df):
                             source.append(df['source'][i]+' reversed')
                         else:
                             source.append(df['source'][i]+' reversed_suggested')
+                        natural.append(df['natural'][i])
+                        organism.append(df['organism'][i])
+                        protein_refs.append(df['protein_refs'][i])
+                        protein_db.append(df['protein_db'][i])
 
     if len(set([len(x) for x in [rxn_idx,  mapped, unmapped, orig_rxn_text, rule, rule_id, source, steps, quality]])) != 1:
         raise ValueError('Error in suggesting reversible reactions encountered.')
-    df_final = pd.DataFrame(list(zip(rxn_idx, mapped, unmapped, orig_rxn_text, rule, rule_id, source, steps, quality)),columns=['rxn_idx', 'mapped', 'unmapped', 'orig_rxn_text', 'rule', 'rule_id', 'source', 'steps', 'quality'])
+    df_final = pd.DataFrame(list(zip(rxn_idx, mapped, unmapped, orig_rxn_text, rule, rule_id, source, steps, quality, natural, organism, protein_refs, protein_db)),
+                            columns=['rxn_idx', 'mapped', 'unmapped', 'orig_rxn_text', 'rule', 'rule_id', 'source', 'steps', 'quality', 'natural', 'organism', 'protein_refs', 'protein_db'])
 
     #Standardize mappings:
     mapped=[]
+    cached=dict()
     for i in df_final.index:
         print(i,end='\r')
-        mapped.append(standardize_mapping_rxn(df_final['mapped'][i]))
+        if df_final['mapped'][i] not in cached.keys():
+            standardized = standardize_mapping_rxn(df_final['mapped'][i])
+            mapped.append(standardized)
+            cached[df_final['mapped'][i]] = standardized
+        else:
+            mapped.append(cached[df_final['mapped'][i]])
     
     df_final['mapped'] = mapped
 

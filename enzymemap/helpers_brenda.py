@@ -152,7 +152,7 @@ def extract_reaction(rxn: str) -> dict:
 
     # Fix 'NAD' errors:
     if 'NADH+ H+' in rxn:
-        rxn = rxn.replace('NADH+ H+', 'NADH + H+')     
+        rxn = rxn.replace('NADH+ H+', 'NADH + H+')
     if '(R)-3-hydroxybutanoyl-CoA +NADP+' in rxn:
         rxn = rxn.replace('(R)-3-hydroxybutanoyl-CoA +NADP+', '(R)-3-hydroxybutanoyl-CoA + NADP+')
     if ')poly(ethyleneglycol)-N6-(2-aminoethyl)-NADH' in rxn:
@@ -280,6 +280,95 @@ def entry_lines(body: str, tag: str):
 
         yield line
         
+def get_parser(header):
+    """ Return function that should parse this header"""
+
+    parser_list = {"PROTEIN": parse_protein}
+    if header in parser_list:
+        return parser_list[header]
+    else:
+        return None
+
+
+def parse_protein(body: str, enzymes: dict, tag: str, ec_num: str,
+                  **kwargs) -> None:
+    """parse_protein.
+
+    Args:
+        body (str): body
+        enzymes (dict): enzymes
+        tag (str) : Tag associated with the entry header (without the tab)
+        ec_num (str): ec number to use
+
+    Returns:
+        None:
+    """
+    # Split at thet tag
+    for line in entry_lines(body, tag):
+        org_num, pr_split, comments, refs = extract_orgs_desc(line)
+
+        # Extract single org num
+        if len(org_num) != 1:
+            raise Exception(
+                f"Found multiple organism numbers for protein {line}")
+        else:
+            org_num = org_num[0]
+
+        # Search line for uniprot regex
+        # Add support for multiple ref ids
+
+        ref_ids = re.findall(UNIPROT_RE, pr_split)
+        protein_db_default = "uniprot"
+
+        # If empty set 
+        if not ref_ids:
+            ref_ids = re.findall(GENBANK_RE, pr_split)
+            protein_db_default = "genbank"
+
+        # extract which protein database
+        protein_db = re.search(PROTEIN_DB_RE, pr_split, re.IGNORECASE)
+        protein_db = protein_db.group().lower() if protein_db else protein_db
+
+        # If protein db wasn't listed but we found an RE match for a ref id,
+        # set it
+        if not protein_db and ref_ids:   
+            protein_db = protein_db_default
+
+        # Handle no activity case
+        no_activity = re.search(NO_ACTIVITY_RE, pr_split, re.IGNORECASE)
+        no_activity = no_activity.group() if no_activity else no_activity
+        is_negative = True if no_activity else False
+
+        # Extract all extra categories
+        if ref_ids:
+            for ref_id in ref_ids: 
+                pr_split = pr_split.replace(ref_id, "").strip()
+
+            # Also replace the "and" token in case we have joiners
+            pr_split = re.sub(" and ", "", pr_split, flags=re.IGNORECASE).strip()
+
+        if protein_db:
+            # Case insensitive!
+            pr_split = re.sub(protein_db, "", pr_split, flags=re.IGNORECASE).strip()
+        if no_activity:
+            pr_split = pr_split.replace(no_activity, "").strip()
+
+        organism = pr_split
+        # Because we're defining organism numbers in this loop, comments must
+        # be specific
+        comments = comments.get(org_num, [])
+        enzymes[org_num] = defaultdict(lambda: [])
+        enzymes[org_num].update({
+            "ec_num": ec_num,
+            "organism": organism,
+            "ref_ids": ref_ids,
+            "protein_db": protein_db,
+            "no_activity": is_negative,
+            "refs": refs,
+            "comments": comments,
+        })
+
+
 def process_entry(brenda_entry):
     """process_entry.
 
@@ -302,15 +391,26 @@ def process_entry(brenda_entry):
         return None
     ec_num = ec_num_text.split(" ")[0]
     reactions=[]
+    enzymes = dict()
+    general_stats = defaultdict(lambda: [])
+    extra_args = {"ec_num": ec_num, "general_stats": general_stats}
     print('processing entry:',ec_num)
     for j in cats:
         j = j.strip()
         header, body = j.split("\n", 1)
         header, body = header.strip(), body.strip()
+        tag = re.search(TAG_RE, body).groups(1)[0]
+        
+        parse_fn = get_parser(header)
+        if parse_fn:
+            parse_fn(body, enzymes, tag, header=header, **extra_args)
+
         if not header in headers:
-            continue
+            continue        
+        
         for line in entry_lines(body, tags[header]):
-            _, desc, _, _ = extract_orgs_desc(line)
+            org_nums, desc, _, _ = extract_orgs_desc(line)
+
             orig_desc = desc
             #Split into two reactions for NAD(P)+/NAD(P)H:
             if desc.count('NAD(P)') == 2:
@@ -321,7 +421,18 @@ def process_entry(brenda_entry):
                     continue
                 desc2['EC_NUM'] = ec_num
                 desc2['ORIG_RXN_TEXT'] = orig_desc
-                reactions.append(desc2)
+                desc2['NATURAL'] = tags[header]=='NSP'
+                for org_num in org_nums:
+                    if org_num in enzymes.keys():
+                        desc2['ORGANISM']=enzymes[org_num]['organism']
+                        desc2['PROTEIN_REFS']=sorted(enzymes[org_num]['ref_ids'])
+                        desc2['PROTEIN_DB']=enzymes[org_num]['protein_db']
+                    else:
+                        print("organism not found, setting information to None")
+                        desc2['ORGANISM']=None
+                        desc2['PROTEIN_REFS']=[]
+                        desc2['PROTEIN_DB']=None
+                    reactions.append(desc2.copy())
                 
             #Correct if only one NAD(P):
             if desc.count('NAD(P)') == 1:
@@ -335,7 +446,18 @@ def process_entry(brenda_entry):
                 continue
             desc['EC_NUM'] = ec_num
             desc['ORIG_RXN_TEXT'] = orig_desc
-            reactions.append(desc)
+            desc['NATURAL'] = tags[header]=='NSP'
+            for org_num in org_nums:
+                if org_num in enzymes.keys():
+                    desc['ORGANISM']=enzymes[org_num]['organism']
+                    desc['PROTEIN_REFS']=sorted(enzymes[org_num]['ref_ids'])
+                    desc['PROTEIN_DB']=enzymes[org_num]['protein_db'] 
+                else:
+                    print("organism not found, setting information to None")
+                    desc['ORGANISM']=None
+                    desc['PROTEIN_REFS']=[]
+                    desc['PROTEIN_DB']=None
+                reactions.append(desc.copy())
     return reactions
 
 
@@ -350,7 +472,7 @@ def parse_brenda(file_loc):
     Return: 
         Pandas dataframe containing EC numbers, lists of substrates and products, the reaction texts and the reversibility tag, as well as a dataframe of compounds
     """
-    df = pd.DataFrame(columns=['EC_NUM','SUBSTRATES','PRODUCTS','RXN_TEXT','REVERSIBLE'])
+    df = pd.DataFrame(columns=['EC_NUM','SUBSTRATES','PRODUCTS','RXN_TEXT','REVERSIBLE','ORIG_RXN_TEXT','NATURAL','ORGANISM','PROTEIN_REFS','PROTEIN_DB'])
 
     buff = ''
     with open(file_loc) as fp:
@@ -364,15 +486,21 @@ def parse_brenda(file_loc):
                 if r"///" in new_line:
                     reactions = process_entry(buff)
                     if reactions:
-                        df = pd.concat([df,pd.DataFrame(reactions)],ignore_index=True) #df.append(reactions, ignore_index=True)
+                        if len(df)>0:
+                            df = pd.concat([df,pd.DataFrame(reactions)],ignore_index=True)
+                        else:
+                            df = pd.DataFrame(reactions)
                     buff = new_line
                 elif len(buff) > 0:
                     buff += new_line
             new_line = fp.readline()
-        
-    df = df.drop_duplicates(subset=['EC_NUM', 'RXN_TEXT']) # Drop duplicates
+
+    df = df.loc[df.astype(str).drop_duplicates().index] # Drop duplicates (cast as str to avoid problem with list)
     df = df[~df['EC_NUM'].str.startswith('7')] # Drop transferases
     df = df.reset_index(drop=True) #Reset index
+
+    print("Read in BRENDA")
+    print(df)
 
     compounds=set()
     for x in df['SUBSTRATES']:
