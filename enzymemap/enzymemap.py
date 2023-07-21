@@ -36,7 +36,7 @@ def make_initial(file_loc, file_loc_inchi, file_loc_chebi, manual_corrections=Fa
         reacs = [".".join(x) for x in list(itertools.product(*[compound_to_smiles[x] for x in df['SUBSTRATES'][i]]))]
         prods = [".".join(x) for x in list(itertools.product(*[compound_to_smiles[x] for x in df['PRODUCTS'][i]]))]
         reaction = [">>".join(x) for x in list(itertools.product(*[reacs, prods]))]
-        reaction = [put_h_last(r) for r in reaction]
+        reaction = [helpers_rdkit.put_h_last(r) for r in reaction]
         reactions.append(reaction)
     df['POSSIBLE_RXNS'] = reactions
 
@@ -50,7 +50,7 @@ def make_initial(file_loc, file_loc_inchi, file_loc_chebi, manual_corrections=Fa
         print(i,end='\r')
         if df['RXN_TEXT'][i] not in cached:
             rxns = helpers_rdkit.correct_reaction(df['POSSIBLE_RXNS'][i], df['RXN_TEXT'][i], reduced_to_oxidized, oxidized_to_reduced)
-            rxns = [put_h_last(r) for r in rxns]
+            rxns = [helpers_rdkit.put_h_last(r) for r in rxns]
             cached[df['RXN_TEXT'][i]]=rxns
         else:
             rxns = cached[df['RXN_TEXT'][i]]
