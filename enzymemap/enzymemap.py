@@ -94,12 +94,12 @@ def map_group(df, db_rules):
         if len(df['balanced_rxns'][i]) > 0:
             rxns, rules, rule_ids, indis = helpers_map.map(df['balanced_rxns'][i], db_rules, single=True)
             if len(rxns) > 0:
-                df.loc[i, 'source'] = 'direct'
-                df.loc[i, 'step'] = 'single'
-                df.loc[i, 'mapped_rxns'] = rxns
-                df.loc[i, 'rules'] = rules
-                df.loc[i, 'rule_ids'] = rule_ids
-                df.loc[i, 'individuals'] = indis
+                df['source'][i] = 'direct'
+                df['step'][i] = 'single'
+                df['mapped_rxns'][i] = rxns
+                df['rules'][i] = rules
+                df['rule_ids'][i] = rule_ids
+                df['individuals'][i] = indis
 
     # Try multi step map with corrected stereochem on balanced reactions
     print("Mapping multi steps")
@@ -112,12 +112,12 @@ def map_group(df, db_rules):
             else:
                 rxns, rules, rule_ids, indis = helpers_map.map(df['balanced_rxns'][i], db_rules.loc[rule_ids_in_ec], single=False)
             if len(rxns) > 0:
-                df.loc[i, 'source'] = 'direct'
-                df.loc[i, 'step'] = 'multi'
-                df.loc[i, 'mapped_rxns'] = rxns
-                df.loc[i, 'rules'] = rules
-                df.loc[i, 'rule_ids'] = rule_ids
-                df.loc[i, 'individuals'] = indis
+                df['source'][i] = 'direct'
+                df['step'][i] = 'multi'
+                df['mapped_rxns'][i] = rxns
+                df['rules'][i] = rules
+                df['rule_ids'][i] = rule_ids
+                df['individuals'][i] = indis
             
     # Suggest for unbalanced or unmapped
     print("Suggesting reactions")
@@ -135,12 +135,12 @@ def map_group(df, db_rules):
                 if len(rxns) > 0:
                     rxns, rules, rule_ids, indis = helpers_map.map(rxns, db_rules.loc[rule_ids_in_ec], single=True)
                     if len(rxns) > 0:
-                        df.loc[i, 'source'] = 'suggested'
-                        df.loc[i, 'step'] = 'single'
-                        df.loc[i, 'mapped_rxns'] = rxns
-                        df.loc[i, 'rules'] = rules
-                        df.loc[i, 'rule_ids'] = rule_ids
-                        df.loc[i, 'individuals'] = indis
+                        df['source'][i] = 'suggested'
+                        df['step'][i] = 'single'
+                        df['mapped_rxns'][i] = rxns
+                        df['rules'][i] = rules
+                        df['rule_ids'][i] = rule_ids
+                        df['individuals'][i] = indis
 
     # If multiple options: select best bond_edits
     print("Per entry, select best option")
