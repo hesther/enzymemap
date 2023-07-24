@@ -147,7 +147,7 @@ def map_group(df, db_rules):
     for i in df.index:
         print(i,end='\r')
         if len(df['mapped_rxns'][i]) > 0:
-            df.loc[i, 'mapped_rxns'], df.loc[i, 'rules'], df.loc[i, 'rule_ids'], df.loc[i, 'individuals'] = helpers_rdkit.select_best(df['mapped_rxns'][i], df['rules'][i], df['rule_ids'][i], df['individuals'][i])
+            df['mapped_rxns'][i], df['rules'][i], df['rule_ids'][i], df['individuals'][i] = helpers_rdkit.select_best(df['mapped_rxns'][i], df['rules'][i], df['rule_ids'][i], df['individuals'][i])
             
     # Judge quality based on rule frequency
     print("Judging quality of reaction")
