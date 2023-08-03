@@ -96,8 +96,8 @@ def plot_chemprop():
     c = ['#611f53', '#cb1b4f',  '#f58860','blue']
     regio_flat = {}
     regio_set = {}
-    labels={'brendadirect':'EnzymeMap','rhea':'RHEA','metamdb':'MetAMDB'}
-    for system in ['rhea','metamdb','brendadirect']:
+    labels={'brendadirectsingle':'EnzymeMap','rhea':'RHEA','metamdb':'MetAMDB'}
+    for system in ['rhea','metamdb','brendadirectsingle']:
         f={}
         s={}
         for i in ["_1000","_3000","_5000","_10000",""]:

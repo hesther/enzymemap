@@ -60,7 +60,7 @@ def cgr_model(system,n_cpus=48,ii=0):
 
 if __name__ == '__main__':
     for ii in range(0,10):
-        cgr_model('brenda',ii=ii)
+        cgr_model('brendadirectsingle',ii=ii)
         cgr_model('metamdb',ii=ii)
         cgr_model('rhea',ii=ii)
 
