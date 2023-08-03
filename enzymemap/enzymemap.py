@@ -181,7 +181,7 @@ def get_data():
         Pandas Dataframe of EnzymeMap
     """
 
-    url = 'https://github.com/hesther/enzymemap/raw/master/data/processed_reactions.csv'
+    url = 'https://github.com/hesther/enzymemap/raw/master/data/processed_reactions.csv.gz'
     df = pd.read_csv(url)
 
     return df
