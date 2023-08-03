@@ -4,8 +4,8 @@ import ast
 import matplotlib.pyplot as plt
 
 def plot_numbers():
-    df_sc = pd.read_csv("../data/processed_reactions.csv")
-    raw=pd.read_csv("../../enzymemap/data/raw_reactions.csv")
+    df_sc = pd.read_csv("../data/processed_reactions.csv").drop_duplicates(subset=['mapped','ec_num'])
+    raw=pd.read_csv("../../enzymemap/data/raw_reactions.csv").drop_duplicates(subset=['SUBSTRATES','PRODUCTS','EC_NUM'])
 
     d={}
 

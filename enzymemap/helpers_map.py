@@ -55,26 +55,28 @@ def delete_dupl(reac, prod):
     
     return new_reacs + ">>" + new_prods
 
-def balance_rxn_protons(rxn_smi):
+def balance_rxn_protons(rxn_smi,diff_h,diff_h2):
     """balance_rxn_protons.
 
     Add protons back to reaction string (needed to be previously balanced!).
 
     Args:
         rxn_smi (str): Reaction SMILES 
+        diff_h (int): difference in protons between reactants and products
+        diff_h2 (int): difference in molecular hydrogen between reactants and products
 
     Returns:
         str: Reaction SMILES
     """
-    reac = rxn_smi.split(">>")[0]
-    prod = rxn_smi.split(">>")[-1]
-    h_r = sum([atom.GetTotalNumHs() for atom in Chem.MolFromSmiles(reac).GetAtoms()])
-    h_p = sum([atom.GetTotalNumHs() for atom in Chem.MolFromSmiles(prod).GetAtoms()])
-    diff = h_p-h_r
-    if diff > 0:
-        reac+=diff*'.[H+]'
-    elif diff < 0:
-        prod+=abs(diff)*'.[H+]'        
+    reac, _, prod = rxn_smi.split(">")
+    if diff_h > 0:
+        reac+=diff_h*'.[H+]'
+    elif diff_h < 0:
+        prod+=abs(diff_h)*'.[H+]'  
+    if diff_h2 > 0:
+        reac+=diff_h2*'.[H][H]'
+    elif diff_h2 < 0:
+        prod+=abs(diff_h2)*'.[H][H]' 
     return reac + ">>" + prod
 
 def reactionFromPermutations(rxn, reactants):
@@ -218,8 +220,7 @@ def propose_new(rxn_smi):
     getfp_chi = lambda smi: AllChem.GetMorganFingerprint(Chem.MolFromSmiles(smi),2,useChirality=True, useFeatures=True)
     similarity_metric = DataStructs.BulkTanimotoSimilarity
 
-    num_h = rxn_smi.split(">")[-1].count('.[H+]')
-    reaction = rxn_smi.replace('.[H+]','')
+    reaction = rxn_smi
     srct = reaction.split(">")[0]
     prod = unmap(reaction.split(">")[-1])
     p_fp = getfp(prod)
@@ -251,7 +252,7 @@ def propose_new(rxn_smi):
             if abs(sim-1)<0.001:
                 sim_chi = similarity_metric(p_fp_chi, p_ref_fp_chi)[0]
                 if sim_chi>max_sim_chi:
-                    new_outcome = '.'.join([outcome]+['[H+]']*num_h)
+                    new_outcome = outcome
     if new_outcome != None:
         return Chem.MolToSmiles(rct.reactants)+">>"+new_outcome
     else:
@@ -272,8 +273,10 @@ def get_mapped_reacs(reacs, prods, rules):
         str, str, int: Mapped reaction SMILES, SMARTS rule, rule id
     """
     #Remove protons since they don't get treated correctly in the reaction rules from Broadbelt et al
-    reacs=reacs.replace('.[H+]','')
-    prods=prods.replace('.[H+]','')
+    diff_h = reacs.split(".").count('[H+]') - prods.split(".").count('[H+]')
+    diff_h2 = reacs.split(".").count('[H][H]') - prods.split(".").count('[H][H]')
+    reacs= ".".join([x for x in reacs.split(".") if x!= '[H+]' and x != '[H][H]'])
+    prods= ".".join([x for x in prods.split(".") if x!= '[H+]' and x != '[H][H]'])
     
     r_a = achiral(reacs)
     p_a = achiral(prods)
@@ -310,13 +313,13 @@ def get_mapped_reacs(reacs, prods, rules):
                     [a.SetAtomMapNum(mp_a.GetAtomWithIdx(match[a.GetIdx()]).GetAtomMapNum()) for a in mp_c.GetAtoms()]
                     
                     rxn_smi = Chem.MolToSmiles(mr_c) + '>>' + Chem.MolToSmiles(mp_c)
-                    rxn_smi = balance_rxn_protons(rxn_smi)
-
+                    
                     if not has_correct(rxn_smi):
                         #Correct stereochem
                         rxn_smi = propose_new(rxn_smi)
                         if not rxn_smi:
                             continue
+                    rxn_smi = balance_rxn_protons(rxn_smi,diff_h,diff_h2)
 
                     return rxn_smi, rules['SMARTS'][i], i
 
@@ -580,9 +583,10 @@ def get_mapped_reacs_multi(reacs, prods, rules, MAX_STEPS=2):
 
     
     #Remove protons since they don't get treated correctly in the reaction rules from Broadbelt et al
-    reacs=reacs.replace('.[H+]','')
-    prods=prods.replace('.[H+]','')
-        
+    diff_h = reacs.split(".").count('[H+]') - prods.split(".").count('[H+]')
+    diff_h2 = reacs.split(".").count('[H][H]') - prods.split(".").count('[H][H]')
+    reacs= ".".join([x for x in reacs.split(".") if x!= '[H+]' and x != '[H][H]'])
+    prods= ".".join([x for x in prods.split(".") if x!= '[H+]' and x != '[H][H]'])
         
     r_a = achiral(reacs)
     p_a = achiral(prods)
@@ -612,13 +616,13 @@ def get_mapped_reacs_multi(reacs, prods, rules, MAX_STEPS=2):
         [a.SetAtomMapNum(mp_a.GetAtomWithIdx(match[a.GetIdx()]).GetAtomMapNum()) for a in mp_c.GetAtoms()]
                     
         rxn_smi = Chem.MolToSmiles(mr_c) + '>>' + Chem.MolToSmiles(mp_c)
-        rxn_smi = balance_rxn_protons(rxn_smi)
 
         if not has_correct(rxn_smi):
             #Correct stereochem
             rxn_smi = propose_new(rxn_smi)
             if not rxn_smi:
                 continue
+        rxn_smi = balance_rxn_protons(rxn_smi,diff_h,diff_h2)
                         
         results_single=[]
         for ii, c in zip(individual, changed_individual):  
@@ -626,7 +630,8 @@ def get_mapped_reacs_multi(reacs, prods, rules, MAX_STEPS=2):
             mip_c = correct_stereochem(c[1], mr_c, mp_c, Chem.MolFromSmiles(ii.split(">>")[-1]))
             
             rxn_smi_i = Chem.MolToSmiles(mir_c) + '>>' + Chem.MolToSmiles(mip_c)
-            rxn_smi_i = balance_rxn_protons(rxn_smi_i)
+            #Cutting the number of protons and H2 in half only makes sense for two-step FIXME
+            rxn_smi_i = balance_rxn_protons(rxn_smi_i,int(diff_h/2),int(diff_h2/2))
             results_single.append(rxn_smi_i)
 
         return rxn_smi, rules['SMARTS'][i], i, results_single
@@ -657,12 +662,18 @@ def map(rxns, rules, single=True):
             reacs, _, prods = rxn.split(">")
 
             if single:
-                try:
-                    result, rule, idx = get_mapped_reacs(reacs, prods, rules)
-                except:
-                    result = None
-                    rule = None
-                    idx = None
+                #Try isomerase first:
+                result = map_isomerase(rxn)
+                if result:
+                    rule=None
+                    idx=-1
+                else:
+                    try:
+                        result, rule, idx = get_mapped_reacs(reacs, prods, rules)
+                    except:
+                        result = None
+                        rule = None
+                        idx = None
                 indi = None
             else:
                 try:
@@ -1010,3 +1021,29 @@ def make_final(df):
     df_final['mapped'] = mapped
 
     return df_final
+
+def map_isomerase(rxn):
+    """map_isomerase.
+
+    Check whether the rxn only contains stereochemical changes
+
+    Args:
+        rxn: Reaction SMILES
+
+    Returns:
+        Changed reaction SMILES or None
+    """
+    r,_,p=rxn.split(">")
+    if achiral(r)==achiral(p):
+        mol_r=Chem.MolFromSmiles(r)
+        mol_p=Chem.MolFromSmiles(p)
+        [a.SetAtomMapNum(a.GetIdx()+1) for a in mol_r.GetAtoms() if a.GetSymbol()!='H']
+        if len(mol_p.GetSubstructMatches(mol_r))>1:
+            print("possible different mappings, ignoring all but first",rxn)
+        for i,j in enumerate(mol_p.GetSubstructMatch(mol_r)):
+            mol_p.GetAtomWithIdx(j).SetAtomMapNum(i+1)           
+        r=Chem.MolToSmiles(Chem.MolFromSmiles(Chem.MolToSmiles(mol_r)))
+        p=Chem.MolToSmiles(Chem.MolFromSmiles(Chem.MolToSmiles(mol_p)))
+        return r+">>"+p
+    else:
+        return None

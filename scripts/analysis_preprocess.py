@@ -45,13 +45,30 @@ def make_singleprod(path,column='mapped',system='brenda',n_cpus=48):
     Makes reactions with a single product.
     '''
 
-    if system=='brendadirect':
+    if system=='brendadirectsingle':
         data=pd.read_csv(path)
         data=data[data['source']=='direct']
         data=data[data['steps']=='single']
         rxns = data[column]
+    elif system=='brendadirectall':
+        data=pd.read_csv(path)
+        data=data[data['source']=='direct']
+        rxns = data[column]
+    elif system=='brendanotsuggestedall':
+        data=pd.read_csv(path)
+        data=data[~data['source'].str.contains('suggest')]
+        rxns = data[column]
+    elif system=='brendanotreversedall':
+        data=pd.read_csv(path)
+        data==data[~data['source'].str.contains('reverse')]
+        rxns = data[column]
+    elif system=='brendaallsingle':
+        data=pd.read_csv(path)
+        data=data[data['steps']=='single']
+        rxns = data[column]
     else:
         rxns = pd.read_csv(path)[column]
+
     df = pd.DataFrame(list(zip(rxns)), columns=['rxn_smiles'])
     df = df.drop_duplicates(subset=['rxn_smiles'])
     print("Read in",len(df),"reactions (without duplicates)")
@@ -278,8 +295,6 @@ def process(system,n_cpus=48):
     
     data=pd.read_csv("data_analysis/"+system+".csv")
 
-    '''
-
 
     #Correct regular templates
     print("Correct noncanonical templates")
@@ -287,11 +302,7 @@ def process(system,n_cpus=48):
     data["corrected_template_default"] = correct_all_templates(data,"corrected_template_r1","template_default",n_cpus=n_cpus)
 
     #Only keep necessary columns:
-    template_columns=["template_default",
-                  "template_r0",
-                      "template_r1",
-                  "corrected_template_default",
-                  "corrected_template_r1"]
+    template_columns=["corrected_template_default"]
 
     save_columns=["rxn_smiles",
                   "prod_smiles",
@@ -315,7 +326,7 @@ def process(system,n_cpus=48):
     #Split data to train/val/test
     print("Splitting dataset")
     data = split_data_df(data)
-
+    data.to_csv("data_analysis/"+system+"_all.csv",index=False)
 
     datasub = data.loc[data["dataset"] == "train"]
     datasub_val = data.loc [data["dataset"] == "val"]
@@ -336,26 +347,6 @@ def process(system,n_cpus=48):
             datasub_val[["prod_smiles",column+"_id"]].to_csv("data_analysis/"+system+"_"+column+"_val.csv",index=False)
             datasub_test[["prod_smiles",column+"_id"]].to_csv("data_analysis/"+system+"_"+column+"_test.csv",index=False)
 
-    print("Count number of templates")
-    choices=[100,500,1000,4000,len(data)]
-        
-    for i in template_choices:
-        print("Count reactions per template "+i)
-        count_reacs_per_template(data,"template_"+i)
-
-        print("Count templates ("+i+")")
-        for n in choices:
-            print(n,number_unique_templates(data,"template_"+i,n))
-
-    print("Count number of corrected templates")
-
-    for i in template_choices[:-1]:
-        print("Count reactions per template "+i)
-        count_reacs_per_template(data,"corrected_template_"+i)
-
-        print("Count templates ("+i+")")
-        for n in choices:
-            print(n,number_unique_templates(data,"corrected_template_"+i,n))
 
     #Preprocess for CGR
     print("preprocess for cgr-chemprop")
@@ -395,7 +386,7 @@ def process(system,n_cpus=48):
             print("WARNING, wrong number of correct products",i)
         
     df3.to_csv("data_analysis/"+system+"_cgr_class.csv",index=False)
-    '''
+
     df3=pd.read_csv("data_analysis/"+system+"_cgr_class.csv")
     
     for ii in range(5,10):
@@ -423,26 +414,117 @@ def process(system,n_cpus=48):
             d.to_csv("data_analysis/"+system+"_cgr_class_train_split"+str(ii)+"_"+str(t)+".csv",index=False)
 
 
+def process_same_test(system,test,n_cpus=48):
+    """
+    Processes the data for either uspto_50k or uspto_460k
+    
+    :param system: String of system name.
+    :param test: String of test file
+    """
+    
+    template_choices = ["default", "r1", "r0"]
+    template_columns=["corrected_template_default"]
+    
+    data=pd.read_csv("data_analysis/"+system+"_all.csv")
+    data_test=pd.read_csv("data_analysis/"+test+"_all.csv")
+    data_test=data_test.loc[data_test["dataset"] == "test"]
+    list_test=list(data_test['rxn_smiles'].values)
+    print("External test",len(data_test))
 
+
+    #Drop rows which are in test
+    print(len(data))
+    data=data.drop(data[data['rxn_smiles'].isin(list_test)].index)
+    print(len(data))
+ 
+    #Split data to train/val/test
+    print("Splitting dataset")
+    data = split_data_df(data,val_frac=0.2,test_frac=0.0)
+
+    data=pd.concat([data,data_test],ignore_index=True)
+
+
+    
+    # Find unique template indices
+    print("Preprocess data for ML-fixed algorithm")
+    lengths={}
+    for column in template_columns:
+        unique_templates=sorted(list(set(data[column].values)))
+        with open("data_analysis/"+system+"_"+column+"_unique_templates.txt", "w") as f:
+            for item in unique_templates:
+                f.write("%s\n" % item)
+        lengths[column]=len(unique_templates)
+        template_ids=[]
+        for template in data[column]:
+            template_ids.append(unique_templates.index(template))
+        data[column+"_id"]=template_ids
+    
+
+    datasub = data.loc[data["dataset"] == "train"]
+    datasub_val = data.loc [data["dataset"] == "val"]
+    datasub_test = data.loc [data["dataset"] == "test"]
+
+
+    system+='_sametest'
+    #Save for ML
+    for column in template_columns:
+        np.save("data_analysis/"+system+"num_classes_"+column+".npy",lengths[column])
+
+    for column in template_columns:
+        if "forward" in column:
+            datasub[["reac_smiles",column+"_id"]].to_csv("data_analysis/"+system+"_"+column+"_train.csv",index=False)
+            datasub_val[["reac_smiles",column+"_id"]].to_csv("data_analysis/"+system+"_"+column+"_val.csv",index=False)
+            datasub_test[["reac_smiles",column+"_id"]].to_csv("data_analysis/"+system+"_"+column+"_test.csv",index=False)
+        else:
+            datasub[["prod_smiles",column+"_id"]].to_csv("data_analysis/"+system+"_"+column+"_train.csv",index=False)
+            datasub_val[["prod_smiles",column+"_id"]].to_csv("data_analysis/"+system+"_"+column+"_val.csv",index=False)
+            datasub_test[["prod_smiles",column+"_id"]].to_csv("data_analysis/"+system+"_"+column+"_test.csv",index=False)
+
+            
 if __name__ == '__main__':
     #enzymemap
-#    make_singleprod(path="../data/processed_reactions.csv",column='mapped',system='brenda',n_cpus=48)
-#    read_and_save(system='brenda',n_cpus=48)
-#    process(system='brenda',n_cpus=48)
+    make_singleprod(path="../data/processed_reactions.csv",column='mapped',system='brenda',n_cpus=48)
+    read_and_save(system='brenda',n_cpus=48)
+    process(system='brenda',n_cpus=48)
     
-    #enzymemap direct                                                                                                                                                                                                               
-#    make_singleprod(path="../data/processed_reactions.csv",column='mapped',system='brendadirect',n_cpus=48)
-#    read_and_save(system='brendadirect',n_cpus=48)
-    process(system='brendadirect',n_cpus=48)
-    
-    #rhea
-#    make_singleprod(path="../data/RHEA_reactions.csv",column='rxn_smiles',system='rhea',n_cpus=48)
-#    read_and_save(system='rhea',n_cpus=48)
-    process(system='rhea',n_cpus=48)
+    #enzymemap direct single                                                                                                                                                                                                              
+    make_singleprod(path="../data/processed_reactions.csv",column='mapped',system='brendadirectsingle',n_cpus=48)
+    read_and_save(system='brendadirectsingle',n_cpus=48)
+    process(system='brendadirectsingle',n_cpus=48)
+    process_same_test(system='brendadirectsingle',test='brenda',n_cpus=48)
 
+    #enzymemap direct all                                                                                                                                                                                                              
+    make_singleprod(path="../data/processed_reactions.csv",column='mapped',system='brendadirectall',n_cpus=48)
+    read_and_save(system='brendadirectall',n_cpus=48)
+    process(system='brendadirectall',n_cpus=48)
+    process_same_test(system='brendadirectall',test='brenda',n_cpus=48)
+
+    #enzymemap not suggested all                                                                                                                                                                                                              
+    make_singleprod(path="../data/processed_reactions.csv",column='mapped',system='brendanotsuggestedall',n_cpus=48)
+    read_and_save(system='brendanotsuggestedall',n_cpus=48)
+    process(system='brendanotsuggestedall',n_cpus=48)
+    process_same_test(system='brendanotsuggestedall',test='brenda',n_cpus=48)
+
+    #enzymemap not reversed all                                                                                                                                                                                                              
+    make_singleprod(path="../data/processed_reactions.csv",column='mapped',system='brendanotreversedall',n_cpus=48)
+    read_and_save(system='brendanotreversedall',n_cpus=48)
+    process(system='brendanotreversedall',n_cpus=48)
+    process_same_test(system='brendanotreversedall',test='brenda',n_cpus=48)
+
+    #enzymemap all single                                                                                                                                                                                                           
+    make_singleprod(path="../data/processed_reactions.csv",column='mapped',system='brendaallsingle',n_cpus=48)
+    read_and_save(system='brendaallsingle',n_cpus=48)
+    process(system='brendaallsingle',n_cpus=48)
+    process_same_test(system='brendaallsingle',test='brenda',n_cpus=48)
+
+    #rhea
+    make_singleprod(path="../data/RHEA_reactions.csv",column='rxn_smiles',system='rhea',n_cpus=48)
+    read_and_save(system='rhea',n_cpus=48)
+    process(system='rhea',n_cpus=48)
+    process_same_test(system='rhea',test='brenda',n_cpus=48)
 
     #metamdb
-#    make_singleprod(path="../data/MetAMDB_reactions.csv",column='rxn_smiles',system='metamdb',n_cpus=48)
-#    read_and_save(system='metamdb',n_cpus=48)
+    make_singleprod(path="../data/MetAMDB_reactions.csv",column='rxn_smiles',system='metamdb',n_cpus=48)
+    read_and_save(system='metamdb',n_cpus=48)
     process(system='metamdb',n_cpus=48)
-
+    process_same_test(system='metamdb',test='brenda',n_cpus=48)

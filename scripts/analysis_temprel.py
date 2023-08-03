@@ -274,9 +274,20 @@ def ml_fixed_model(system,n_cpus=1):
 
 if __name__ == '__main__':
     ml_fixed_model('brenda')
-    ml_fixed_model('brendadirect')
+    ml_fixed_model('brendadirectsingle')
+    ml_fixed_model('brendadirectsingle_sametest')
+    ml_fixed_model('brendadirectall')
+    ml_fixed_model('brendadirectall_sametest')
+    ml_fixed_model('brendanotsuggestedall')
+    ml_fixed_model('brendanotsuggestedall_sametest')
+    ml_fixed_model('brendanotreversedall')
+    ml_fixed_model('brendanotreversedall_sametest')
+    ml_fixed_model('brendaallsingle')
+    ml_fixed_model('brendaallsingle_sametest')
     ml_fixed_model('metamdb')
+    ml_fixed_model('metamdb_sametest')
     ml_fixed_model('rhea')
+    ml_fixed_model('rhea_sametest')
 
 
 

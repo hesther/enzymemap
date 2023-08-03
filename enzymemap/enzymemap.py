@@ -76,6 +76,7 @@ def map_group(df, db_rules):
     """
 
     groups = helpers_map.get_groups(db_rules)
+    groups.append({-1}) # For isomerase reactions
 
     df = df[['POSSIBLE_RXNS','ORIG_RXN_TEXT','REVERSIBLE','BALANCED_RXNS','NATURAL','ORGANISM','PROTEIN_REFS','PROTEIN_DB']].copy()
     df.columns = ['uncorrected_rxns', 'rxn_text', 'reversible','balanced_rxns','natural','organism','protein_refs','protein_db']
