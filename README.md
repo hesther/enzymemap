@@ -14,7 +14,12 @@ If you use EnzymeMap, please cite our publication "EnzymeMap: Curation, validati
 
 ### Database
 
-To simply use the EnzymeMap database, use data/processed_reactions.csv or download EnzymeMap from [Zenodo](https://doi.org/10.5281/zenodo.7841781). Within python (with a valid enzymemap installation) you can also run `enzymemap.get_data()`.
+To simply use the EnzymeMap database, use data/processed_reactions.csv.gz (corresponds to the newest version, currently v2) or download EnzymeMap from Zenodo:
+
+* [Version 2](https://doi.org/10.5281/zenodo.8254726) (to be added shortly)
+* [Version 1](https://doi.org/10.5281/zenodo.7841781)
+
+Within python (with a valid enzymemap installation) you can also run `enzymemap.get_data()` (corresponds to the newest version, currently v2).
 
 ### Installation
 
