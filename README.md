@@ -14,7 +14,7 @@ If you use EnzymeMap, please cite our publication "EnzymeMap: Curation, validati
 
 ### Database
 
-To simply use the EnzymeMap database, use data/processed_reactions.csv.gz (corresponds to the newest version, currently v2) or download EnzymeMap from Zenodo :
+To simply use the EnzymeMap database, use data/processed_reactions.csv.gz (corresponds to the newest version, currently v2) or download EnzymeMap from Zenodo:
 
 * [Permanent link to latest version](https://doi.org/10.5281/zenodo.7841780)
 * [Version 2](https://doi.org/10.5281/zenodo.8254726) 
