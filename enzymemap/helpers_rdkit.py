@@ -744,3 +744,11 @@ def select_best(rxns, rules, ids, individuals):
             new_indis.append(individuals[j])
     return new_rxns, new_rules, new_ids, new_indis
     
+
+def put_h_last(rxn):
+    reac,_,prod = rxn.split(">")
+    reac_list = reac.split(".")
+    prod_list = prod.split(".")
+    reac = '.'.join([r for r in reac_list if r!="[H+]"]+["[H+]"]*reac_list.count("[H+]"))
+    prod = '.'.join([r for r in prod_list if r!="[H+]"]+["[H+]"]*prod_list.count("[H+]"))
+    return reac+">>"+prod

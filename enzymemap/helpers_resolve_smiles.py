@@ -89,6 +89,7 @@ def download_ftp(ftp_link: str, outfile: str):
         outfile (str): outfile
     """
 
+    ftp_link=ftp_link.replace('ftp','https')
     with closing(request.urlopen(ftp_link)) as r:
         with open(outfile, 'wb') as f:
             shutil.copyfileobj(r, f)

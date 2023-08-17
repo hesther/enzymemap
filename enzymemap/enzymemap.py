@@ -36,17 +36,24 @@ def make_initial(file_loc, file_loc_inchi, file_loc_chebi, manual_corrections=Fa
         reacs = [".".join(x) for x in list(itertools.product(*[compound_to_smiles[x] for x in df['SUBSTRATES'][i]]))]
         prods = [".".join(x) for x in list(itertools.product(*[compound_to_smiles[x] for x in df['PRODUCTS'][i]]))]
         reaction = [">>".join(x) for x in list(itertools.product(*[reacs, prods]))]
+        reaction = [helpers_rdkit.put_h_last(r) for r in reaction]
         reactions.append(reaction)
     df['POSSIBLE_RXNS'] = reactions
 
     reduced_to_oxidized, oxidized_to_reduced = helpers_rdkit.get_strip_list(compound_to_smiles)
     
     # Correct and balance reactions
+    cached=dict()
     print("Correcting and balancing")
     balanced_rxn_list = []
     for i in df.index:
         print(i,end='\r')
-        rxns = helpers_rdkit.correct_reaction(df['POSSIBLE_RXNS'][i], df['RXN_TEXT'][i], reduced_to_oxidized, oxidized_to_reduced)
+        if df['RXN_TEXT'][i] not in cached:
+            rxns = helpers_rdkit.correct_reaction(df['POSSIBLE_RXNS'][i], df['RXN_TEXT'][i], reduced_to_oxidized, oxidized_to_reduced)
+            rxns = [helpers_rdkit.put_h_last(r) for r in rxns]
+            cached[df['RXN_TEXT'][i]]=rxns
+        else:
+            rxns = cached[df['RXN_TEXT'][i]]
         balanced_rxn_list.append(rxns)
     df['BALANCED_RXNS'] = balanced_rxn_list
 
@@ -69,9 +76,10 @@ def map_group(df, db_rules):
     """
 
     groups = helpers_map.get_groups(db_rules)
+    groups.append({-1}) # For isomerase reactions
 
-    df = df[['POSSIBLE_RXNS','RXN_TEXT','REVERSIBLE','BALANCED_RXNS']].copy()
-    df.columns = ['uncorrected_rxns', 'rxn_text', 'reversible','balanced_rxns']
+    df = df[['POSSIBLE_RXNS','ORIG_RXN_TEXT','REVERSIBLE','BALANCED_RXNS','NATURAL','ORGANISM','PROTEIN_REFS','PROTEIN_DB']].copy()
+    df.columns = ['uncorrected_rxns', 'rxn_text', 'reversible','balanced_rxns','natural','organism','protein_refs','protein_db']
     df['source'] = None
     df['step'] = None
     df['mapped_rxns'] = [[] for _ in range(len(df))]
@@ -144,7 +152,6 @@ def map_group(df, db_rules):
             
     # Judge quality based on rule frequency
     print("Judging quality of reaction")
-    df['quality']=None
     l = [item for sublist in df['rule_ids'].values for item in sublist if item != None]
     counts={}
     for group in groups:
@@ -155,8 +162,7 @@ def map_group(df, db_rules):
         if count != 0:
             for x in group:
                 counts[x] = count/len(l)
-    for i in df.index:
-        df['quality'][i] = [counts[r] for r in df['rule_ids'][i]]    
+    df['quality'] = [[counts[r] for r in df['rule_ids'][i]] for i in df.index]
     
     # Add reverse reactions for reversible cases and split into individual entries
     print("Adding reversible reactions")
@@ -175,7 +181,7 @@ def get_data():
         Pandas Dataframe of EnzymeMap
     """
 
-    url = 'https://github.com/hesther/enzymemap/raw/master/data/processed_reactions.csv'
+    url = 'https://github.com/hesther/enzymemap/raw/master/data/processed_reactions.csv.gz'
     df = pd.read_csv(url)
 
     return df

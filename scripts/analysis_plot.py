@@ -4,8 +4,8 @@ import ast
 import matplotlib.pyplot as plt
 
 def plot_numbers():
-    df_sc = pd.read_csv("../data/processed_reactions.csv")
-    raw=pd.read_csv("../../enzymemap/data/raw_reactions.csv")
+    df_sc = pd.read_csv("../data/processed_reactions.csv").drop_duplicates(subset=['mapped','ec_num'])
+    raw=pd.read_csv("../../enzymemap/data/raw_reactions.csv").drop_duplicates(subset=['SUBSTRATES','PRODUCTS','EC_NUM'])
 
     d={}
 
@@ -96,8 +96,8 @@ def plot_chemprop():
     c = ['#611f53', '#cb1b4f',  '#f58860','blue']
     regio_flat = {}
     regio_set = {}
-    labels={'brendadirect':'EnzymeMap','rhea':'RHEA','metamdb':'MetAMDB'}
-    for system in ['rhea','metamdb','brendadirect']:
+    labels={'brendadirectsingle':'EnzymeMap','rhea':'RHEA','metamdb':'MetAMDB'}
+    for system in ['rhea','metamdb','brendadirectsingle']:
         f={}
         s={}
         for i in ["_1000","_3000","_5000","_10000",""]:
