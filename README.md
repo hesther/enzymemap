@@ -7,6 +7,11 @@ Python package to atom-map, correct and suggest enzymatic reactions
 
 If you use EnzymeMap, please cite our publication "EnzymeMap: Curation, validation and data-driven prediction of enzymatic reactions" by E. Heid, D. Probst, W. H. Green and G. K. H. Madsen. Check our preprint on [ChemRxiv](https://doi.org/10.26434/chemrxiv-2023-jzw9w).
 
+### News
+
+* August 2023: VERSION 2: A new version of EnzymeMap is released including important bugfixes for isomerase reactions and some reactions containing protons, as well as the addition of protein information. This makes the raw and processed files rather large. For your application, if no protein information is required, you should delete the respective columns and then drop duplicates.
+
+
 ### Database
 
 To simply use the EnzymeMap database, use data/processed_reactions.csv or download EnzymeMap from [Zenodo](https://doi.org/10.5281/zenodo.7841781). Within python (with a valid enzymemap installation) you can also run `enzymemap.get_data()`.
@@ -62,6 +67,12 @@ to make one dataframe containing all EC numbers. You now have recreated EnzymeMa
 ### Reproduce our study: Train and evaluate machine learning models
 
 Run the scripts `analysis_preprocess.py` (process data), `analysis_temprel.py` (train template relevance model, use conda environment from [templatecorr](https://github.com/hesther/templatecorr)), `analysis_chemprop.py`(train CGR-chemprop model, use conda environment from [chemprop](https://github.com/chemprop/chemprop)) and `analysis_plot` (plot results).
+
+
+### Reproduce our study: Additional benchmarks
+
+Follow the instructions in the additional_benchmarks folder to process KEGG and MetaCyc.
+
 
 ### Copyright
 
