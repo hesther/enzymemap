@@ -258,7 +258,7 @@ def propose_new(rxn_smi):
     else:
         return None
     
-@timeout_decorator.timeout(10)
+@timeout_decorator.timeout(30)
 def get_mapped_reacs(reacs, prods, rules):
     """get_mapped_reacs.
 
@@ -344,7 +344,7 @@ def initial_map(smi):
             ctr += 1
     return ".".join([Chem.MolToSmiles(x) for x in r]), r
 
-@timeout_decorator.timeout(10)
+@timeout_decorator.timeout(20)
 def createReactionInstance_multi(rxn,reactants_unshuffled): 
     """createReactionInstance.
 
