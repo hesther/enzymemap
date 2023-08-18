@@ -244,6 +244,8 @@ def propose_new(rxn_smi):
     max_sim_chi=0
     for outcome in outcomes:
         unmapped = unmap(outcome)
+        if achiral(unmapped) != achiral(prod):
+            continue
         if unmapped not in known:
             known.append(unmapped)
             p_ref_fp = [getfp(outcome)]
