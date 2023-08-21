@@ -287,7 +287,7 @@ def query_cirpy(ids: list) -> dict:
     for id_ in ids:
         smiles = cirpy.resolve(id_, "smiles")
         if smiles:
-            identifier_to_smiles[id_] = smiles
+            identifier_to_smiles[id_] = [smiles,]
         else:
             identifier_to_smiles[id_] = []
     return identifier_to_smiles
@@ -644,7 +644,7 @@ def resolve_all(compound_df: pd.DataFrame, file_loc_inchi: str, file_loc_chebi: 
         compound_df_new[method_name] = compound_df_new['compound'].map(resolved_smiles)
 
     # Combine all the resolved SMILES columns into one column
-    resolved_columns = [column for column in compound_df.keys() if 'smiles_via' in column]
+    resolved_columns = [column for column in compound_df_new.keys() if 'smiles_via' in column]
     compound_df_new['smiles_all'] = pd.Series([[]]*len(compound_df_new), index=compound_df_new.index)
 
     for column in resolved_columns:
