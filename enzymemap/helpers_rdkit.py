@@ -1,3 +1,5 @@
+
+import rdkit
 from rdkit.Chem.MolStandardize import rdMolStandardize
 from rdkit import Chem
 from rdkit.Chem import AllChem
@@ -5,10 +7,11 @@ from copy import deepcopy
 from rdkit.Chem.rdchem import ChiralType, BondType, BondDir, BondStereo
 from wrapt_timeout_decorator import *
 import re
+from typing import Union, List, Tuple, Dict, Any
 import itertools
 from itertools import chain
 
-def get_smi(x):
+def get_smi(x: str) -> Union[str, None]:
     """get_smi.
 
     Returns a standardized SMILES from any SMILES string
@@ -17,7 +20,7 @@ def get_smi(x):
         x (str): SMILES string
 
     Returns:
-        str: Standardized string (else None if not possible)
+        Union[str, None]: Standardized string (else None if not possible)
     """
     mol = Chem.MolFromSmiles(x)
     if mol:
@@ -31,7 +34,7 @@ def get_smi(x):
     except:
         return None
 
-def unmap(smi):
+def unmap(smi: str) -> str:
     """unmap.
 
     Remove atom map from SMILES
@@ -47,16 +50,16 @@ def unmap(smi):
     smi = Chem.MolToSmiles(Chem.MolFromSmiles(Chem.MolToSmiles(mol)))
     return smi
 
-def neutralize_atoms(mol):
+def neutralize_atoms(mol: rdkit.Chem.rdchem.Mol) -> rdkit.Chem.rdchem.Mol:
     """neutralize_atoms.
 
     Neutralize molecule if possible
 
     Args:
-        mol (rdkit.Chem.mol): RDKit molecule
+        mol (rdkit.Chem.rdchem.Mol): RDKit molecule
 
     Returns:
-        rdkit.Chem.mol: Updated molecule object
+        rdkit.Chem.rdchem.Mol: Updated molecule object
     """
     pattern = Chem.MolFromSmarts("[+1!h0!$([*]~[-1,-2,-3,-4]),-1!$([*]~[+1,+2,+3,+4])]")
     at_matches = mol.GetSubstructMatches(pattern)
@@ -71,57 +74,57 @@ def neutralize_atoms(mol):
             atom.UpdatePropertyCache()
     return mol
 
-def remove_isotope(mol):
+def remove_isotope(mol: rdkit.Chem.rdchem.Mol) -> rdkit.Chem.rdchem.Mol:
     """remove_isotope.
 
     Remove isotope information
 
     Args:
-        mol (rdkit.Chem.mol): RDKit molecule
+        mol (rdkit.Chem.rdchem.Mol): RDKit molecule
 
     Returns:
-        rdkit.Chem.mol: Updated molecule object
+        rdkit.Chem.rdchem.Mol: Updated molecule object
     """
     for atom in mol.GetAtoms():
         atom.SetIsotope(0)
     return Chem.MolFromSmiles(Chem.MolToSmiles(mol))
 
-def count_nonzero_charges(mol):
+def count_nonzero_charges(mol: rdkit.Chem.rdchem.Mol) -> int:
     """count_nonzero_charges.
 
     Count nonzero charges in a molecule
 
     Args:
-        mol (rdkit.Chem.mol): RDKit molecule
+        mol (rdkit.Chem.rdchem.Mol): RDKit molecule
 
     Returns:
         int: Number of nonzero charges 
     """
     return sum([a.GetFormalCharge()!=0 for a in mol.GetAtoms()])
 
-def achiral_mol(mol):
+def achiral_mol(mol: rdkit.Chem.rdchem.Mol) -> rdkit.Chem.rdchem.Mol:
     """achiral_mol.
 
     Remove stereoinformation information
 
     Args:
-        mol (rdkit.Chem.mol): RDKit molecule
+        mol (rdkit.Chem.rdchem.Mol): RDKit molecule
 
     Returns:
-        rdkit.Chem.mol: Updated molecule object
+        rdkit.Chem.rdchem.Mol: Updated molecule object
     """
     mol_achiral = deepcopy(mol)
     [a.SetChiralTag(ChiralType.CHI_UNSPECIFIED) for a in mol_achiral.GetAtoms()]
     [(b.SetStereo(BondStereo.STEREONONE), b.SetBondDir(BondDir.NONE)) for b in mol_achiral.GetBonds()]
     return Chem.MolToSmiles(mol_achiral)
 
-def count_chiral(mol):
+def count_chiral(mol: rdkit.Chem.rdchem.Mol) -> int:
     """count_chiral.
 
     Count stereocenters in a molecule
 
     Args:
-        mol (rdkit.Chem.mol): RDKit molecule
+        mol (rdkit.Chem.rdchem.Mol): RDKit molecule
 
     Returns:
         int: Number of stereocenters 
@@ -130,16 +133,16 @@ def count_chiral(mol):
     chiral_bonds = sum([b.GetStereo()!= BondStereo.STEREONONE for b in mol.GetBonds()])
     return chiral_atoms + chiral_bonds
     
-def get_more_chiral(smis):
+def get_more_chiral(smis: List[str]) -> List[str]:
     """get_more_chiral.
 
     From a list of smiles, find the one producing the molecule with most stereocenters specified
 
     Args:
-        smis (List(str)): List of SMILES strings
+        smis (List[str]): List of SMILES strings
 
     Returns:
-        int: List of SMILES strings with most stereocenters specified
+        List[str]: List of SMILES strings with most stereocenters specified
     """
     mols = [Chem.MolFromSmiles(smi) for smi in smis]
     achiral_smis = [achiral_mol(mol) for mol in mols]
@@ -154,7 +157,7 @@ def get_more_chiral(smis):
             chiral_smis.extend([Chem.MolToSmiles(x) for x in current])            
     return chiral_smis 
 
-def get_tautomers(smi):
+def get_tautomers(smi: str) -> str:
     """get_tautomers.
 
     Basic tautomerizations, e.g. phosphate groups or some nitrogen. If a more elaborate tautomerization is required, change this function.
@@ -187,8 +190,8 @@ def get_tautomers(smi):
         current=tautomer
     return Chem.MolToSmiles(tautomer)
 
-def combine_enantiomers_into_racemic(final_outcomes):
-    '''
+def combine_enantiomers_into_racemic(final_outcomes: List[str]) -> List[str]:
+    """
     If two products are identical except for an inverted CW/CCW or an
     opposite cis/trans, then just strip that from the product. Return
     the achiral one instead.
@@ -200,7 +203,7 @@ def combine_enantiomers_into_racemic(final_outcomes):
         final_outcomes: iterable to act upon
     Returns:
         list: modified final_outcomes
-    '''
+    """
 
     #Generalize atom order:
     final_outcomes_corrected=[]
@@ -270,7 +273,7 @@ def combine_enantiomers_into_racemic(final_outcomes):
     final_outcomes = [Chem.MolToSmiles(Chem.MolFromSmiles(smiles)) for smiles in final_outcomes]
     return final_outcomes
 
-def count_CNOPH(smi):
+def count_CNOPH(smi: str) -> Dict[str, int]:
     """count_CNOPH.
 
     Count elements C, N, O, P and H
@@ -279,7 +282,7 @@ def count_CNOPH(smi):
         smi (str): SMILES string
 
     Returns:
-        dict: Dictionary with element counts
+        Dict[str, int]: Dictionary with element counts
     """
     counts={'C':0, 'N':0, 'O':0, 'P':0, 'H':0}
     mol=Chem.AddHs(Chem.MolFromSmiles(smi))
@@ -290,8 +293,8 @@ def count_CNOPH(smi):
             pass
     return counts
 
-def diff_CNOPH(d1, d2):
-    """count_CNOPH.
+def diff_CNOPH(d1: Dict[str, int], d2: Dict[str, int]) -> Dict[str, int]:
+    """diff_CNOPH.
 
     Count difference in elements C, N, O, P and H
 
@@ -307,7 +310,7 @@ def diff_CNOPH(d1, d2):
         d3[key] = d2[key] - d1[key]
     return d3
 
-def get_diff(rxn, reduced_to_oxidized, oxidized_to_reduced):
+def get_diff(rxn: str, reduced_to_oxidized: Dict[str, str], oxidized_to_reduced: Dict[str, str]) -> str:
     """get_diff.
 
     Try to balance unbalanced reactions by adding missing cofactors.
@@ -364,7 +367,7 @@ def get_diff(rxn, reduced_to_oxidized, oxidized_to_reduced):
     
     return rxn
 
-def get_diff_h(rxn): 
+def get_diff_h(rxn: str) -> str: 
     """get_diff_h.
 
     Try to balance unbalanced reactions by adding protons.
@@ -387,7 +390,7 @@ def get_diff_h(rxn):
         return reac + '>>' + prod + ".[H+]"
     return rxn
 
-def get_diff_h2o2(rxn): 
+def get_diff_h2o2(rxn: str) -> str: 
     """get_diff_h2o2.
 
     Try to balance unbalanced reactions by adding hydrogen peroxide (use only with redoxreactions containing H2O2!).
@@ -422,7 +425,7 @@ def get_diff_h2o2(rxn):
     return '.'.join(reac + h2o2 * ['OO']) + '>>' + '.'.join(prod + h2o2 * 2 * ['O'])
     
 
-def get_balance(rxn):
+def get_balance(rxn: str) -> bool:
     """get_balance.
 
     Compute whether a reaction is balanced (has the same sum formula for reactants and products)
@@ -440,7 +443,7 @@ def get_balance(rxn):
     xp=Chem.rdMolDescriptors.CalcMolFormula(p)
     return xr == xp
 
-def find_multiple_bal(rxn):
+def find_multiple_bal(rxn: str) -> List[str]:
     """find_multiple_bal.
 
     Try to balance unbalanced reactions by changing the stoichiometry.
@@ -485,7 +488,7 @@ def find_multiple_bal(rxn):
     return balanced
 
 @timeout(10)
-def find_multiple_bal_optional_h(rxn):
+def find_multiple_bal_optional_h(rxn: str) -> List[str]:
     """find_multiple_bal_optional_h.
 
     Try to balance unbalanced reactions by changing the stoichiometry (disregarding hydrogens).
@@ -503,14 +506,14 @@ def find_multiple_bal_optional_h(rxn):
             balanced = find_multiple_bal(rxn.replace('.[H+]',''))
     return balanced
 
-def multiple(f1,f2):
+def multiple(f1: List[int], f2: List[int]) -> bool:
     """multiple.
 
     Helper function to detect stoichiometries that are the same, eg 1A + 2B -> 1C is the same as 2A + 4B -> 2C
 
     Args:
-        f1 (List(int)): List of integers
-        f2 (List(int)): List of integers
+        f1 (List[int]): List of integers
+        f2 (List[int]): List of integers
 
     Returns:
         bool: Whether stoichiometries are the same
@@ -520,16 +523,16 @@ def multiple(f1,f2):
         return True
     return False
 
-def delete_same_mols(rxns):
+def delete_same_mols(rxns: List[str]) -> List[str]:
     """delete_same_mols.
 
     Delete molecules that occur on reactant and product site simultaneously
 
     Args:
-        rxn (str): Reaction SMILES
+        rxns (List[str]): List of Reaction SMILES
 
     Returns:
-        str: Updated reaction SMILES
+        List[str]: Updated list of reaction SMILES
     """
     balanced = []
     for rxn in rxns:
@@ -543,7 +546,7 @@ def delete_same_mols(rxns):
             balanced.append(rxn)
     return balanced
 
-def get_strip_list(compound_to_smiles):
+def get_strip_list(compound_to_smiles: Dict[str, List[str]]) -> Tuple[Dict[str, str], Dict[str, str]]:
     """get_strip_list.
 
     Makes reduced_to_oxidized and oxidized_to_reduced dictionaries needed for balancing via cofactors
@@ -552,7 +555,7 @@ def get_strip_list(compound_to_smiles):
         compound_to_smiles (dict): Dictionary mapping trivial names to SMILES
 
     Returns:
-        dict, dict: reduced_to_oxidized and oxidized_to_reduced dictionaries 
+        Tuple[dict, dict]: reduced_to_oxidized and oxidized_to_reduced dictionaries 
     """
     pairs=sorted([(x,compound_to_smiles[x]) for x in compound_to_smiles.keys() if 'NAD' in x and compound_to_smiles[x]!= []])
 
@@ -574,25 +577,25 @@ def get_strip_list(compound_to_smiles):
     return reduced_to_oxidized, oxidized_to_reduced
 
 
-def correct_reaction(rxns, rxn_text, reduced_to_oxidized, oxidized_to_reduced):
+def correct_reaction(rxns: List[str], rxn_text: str, reduced_to_oxidized: Dict[str, str], oxidized_to_reduced: Dict[str, str]) -> List[str]:
     """correct_reaction.
 
     Corrects the reactions of a single BRENDA entry, containing one or multiple possible reaction strings.
 
     Args:
-        rxns (List(str)): List of reaction SMILES.
+        rxns (List[str]): List of reaction SMILES.
         rxn_text (str): Text of reaction entry
-        reduced_to_oxidized (dict): Dictionary mapping reduced to oxidized cofactors
-        oxidized_to_reduced (dict): Dictionary mapping oxidized to reduced cofactors
+        reduced_to_oxidized (Dict[str, str]): Dictionary mapping reduced to oxidized cofactors
+        oxidized_to_reduced (Dict[str, str]): Dictionary mapping oxidized to reduced cofactors
 
     Returns:
-        List(str): List of corrected reactions
+        List[str]: List of corrected reactions
     """
     
     corrected_rxns = []
     for rxn in rxns:
 
-        #Combine enantiomers into racemic compound:
+        # Combine enantiomers into racemic compound:
         reac, _, prod = rxn.split(">")
         reac = ".".join(combine_enantiomers_into_racemic(reac.split(".")))
         reac = ".".join(combine_enantiomers_into_racemic(reac.split(".")))
@@ -603,44 +606,44 @@ def correct_reaction(rxns, rxn_text, reduced_to_oxidized, oxidized_to_reduced):
             corrected_rxns.append(rxn)
             continue
 
-        #Correct errors with unbalanced NAD cofactors:
+        # Correct errors with unbalanced NAD cofactors:
         if 'NAD' in rxn_text:
             rxn = get_diff(rxn, reduced_to_oxidized, oxidized_to_reduced)
             if get_balance(rxn):
                 corrected_rxns.append(rxn)
                 continue
 
-        #Correct for missing hydrogens:
+        # Correct for missing hydrogens:
         rxn = get_diff_h(rxn)
         if get_balance(rxn):
             corrected_rxns.append(rxn)
             continue
 
-        #Correct for wrong H2O2:
+        # Correct for wrong H2O2:
         rxn = get_diff_h2o2(rxn)
         if get_balance(rxn):
             corrected_rxns.append(rxn)
             continue
 
-        #Correct for wrong stoichiometry (takes long, therefore limit number of reactions and size of molecules:
+        # Correct for wrong stoichiometry (takes long, therefore limit number of reactions and size of molecules:
         if len(rxns) <= 100 and Chem.MolFromSmiles(rxn.split(">")[0]).GetNumAtoms() <= 500 and Chem.MolFromSmiles(rxn.split(">")[-1]).GetNumAtoms() <= 500:
             try:
                 #Can find more than one balanced option:
                 balanced = find_multiple_bal_optional_h(rxn)
                 balanced = delete_same_mols(balanced)
-                if len(balanced)>0:
+                if len(balanced) > 0:
                     corrected_rxns.extend(balanced)
                     continue
             except TimeoutError:
                 pass
 
-    #Remove same mols from reac and prod side
+    # Remove same mols from reac and prod side
     corrected_rxns = delete_same_mols(corrected_rxns)
 
     return corrected_rxns
 
         
-def achiral(smi):
+def achiral(smi: str) -> str:
     """achiral.
 
     Get achiral SMILES string
@@ -656,7 +659,7 @@ def achiral(smi):
     [(b.SetStereo(BondStereo.STEREONONE), b.SetBondDir(BondDir.NONE)) for b in mol.GetBonds()]
     return Chem.MolToSmiles(Chem.MolFromSmiles(Chem.MolToSmiles(mol)))          
 
-def chiral(smi):
+def chiral(smi: str) -> str:
     """chiral.
 
     Get standardized chiral SMILES string
@@ -670,7 +673,7 @@ def chiral(smi):
     mol = Chem.MolFromSmiles(smi)
     return Chem.MolToSmiles(mol)   
 
-def bond_edit_stats(rsmi):
+def bond_edit_stats(rsmi: str) -> Dict[str, int]:
     """bond_edit_stats.
 
     Get number of changed atoms and bonds upon reaction
@@ -715,19 +718,19 @@ def bond_edit_stats(rsmi):
         'atoms': len(atoms_changed)
     }
 
-def select_best(rxns, rules, ids, individuals):
+def select_best(rxns: List[str], rules: List[str], ids: List[int], individuals: List[List[str]]) -> Tuple[List[str], List[str], List[int], List[List[str]]]:
     """select_best.
 
     From a list of possible reactions, select those with the lowest number of edits
 
     Args:
-        rxns (List(str)): List of reaction SMILES string
-        rules (List(str)): List of reaction rules
-        ids (List(int)): List of rule ids
-        individuals (List(List(str))): List of list of reaction SMILES of individual reactions for multistep reactions
+        rxns (List[str]): List of reaction SMILES string
+        rules (List[str]): List of reaction rules
+        ids (List[int]): List of rule ids
+        individuals (List[List[str]]): List of list of reaction SMILES of individual reactions for multistep reactions
 
     Returns:
-        Updated rxns, rules, ids, individuals
+        Tuple[List[str], List[str], List[int], List[List[str]]]: Updated rxns, rules, ids, individuals
     """
     bond_edit = [sum(bond_edit_stats(r).values()) for r in rxns]
     min_bond_edit = min(bond_edit)
@@ -745,7 +748,16 @@ def select_best(rxns, rules, ids, individuals):
     return new_rxns, new_rules, new_ids, new_indis
     
 
-def put_h_last(rxn):
+def put_h_last(rxn: str) -> str:
+    """
+    This function rearranges the reaction string to put '[H+]' at the end.
+
+    Args:
+        rxn (str): Reaction SMILES string
+
+    Returns:
+        str: Updated Reaction SMILES string with '[H+]' at the end
+    """
     reac,_,prod = rxn.split(">")
     reac_list = reac.split(".")
     prod_list = prod.split(".")

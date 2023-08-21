@@ -26,21 +26,21 @@ Within python (with a valid enzymemap installation) you can also run `enzymemap.
 
 Download enzymemap from Github:
 
-```
+```bash
 git clone https://github.com/hesther/enzymemap.git
 cd enzymemap
 ```
 
 Set up a conda environment (or install the packages in `environment.yml` in any other way convenient to you):
 
-```
+```bash
 conda env create -f environment.yml
 conda activate enzymemap
 ```
 
 Install the enzymemap package:
 
-```
+```bash
 pip install -e .
 ```
 
@@ -50,21 +50,21 @@ Extract BRENDA in the data folder (run `tar -xzvf brenda_2023_1.txt.tar.gz` in t
 
 Go to the scripts folder and run
 
-```
+```bash
 python make_raw.py
 ```
 
-to produce `data/raw_reactions.csv`, `data/compound_to_smiles.json` and `ec_nums.csv`. This step processes BRENDA entries and resolves all trivial names to SMILES. You might need to download a new opsin.jar from the internet that is suitable for your system. We also provide the three processed files, so you can continue with the following steps without running `make_inital.py`
+to produce `data/raw_reactions.csv`, `data/compound_to_smiles.json` and `data/ec_nums.csv`. This step processes BRENDA entries and resolves all trivial names to SMILES. You might need to download a new opsin.jar from the internet that is suitable for your system. We also provide the three processed files, so you can continue with the following steps without running `make_inital.py`
 
 Then, for each EC number run `process.py`, for example to process EC number 1.1.3.2:
 
-```
+```bash
 python process.py 1.1.3.2
 ```
 
 This produces `data/processed_reactions_1.1.3.2.csv`. Run this for all EC numbers (it is best to parallelize this over many cores). You can also run this the individual calculations on different machines. Once all calculations are done, run
 
-```
+```bash
 python concatenate.py
 ```
 
