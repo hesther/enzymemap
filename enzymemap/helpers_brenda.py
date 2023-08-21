@@ -1,5 +1,5 @@
 import re
-from typing import Tuple
+from typing import Tuple, Dict, List, Set, Optional, Callable, Iterator
 from collections import defaultdict
 import pandas as pd
 
@@ -254,7 +254,7 @@ def extract_reaction(rxn: str) -> dict:
 
     return ret_dict
 
-def entry_lines(body: str, tag: str):
+def entry_lines(body: str, tag: str) -> Iterator[str]:
     """entry_lines.
 
     Helper iterator
@@ -280,8 +280,17 @@ def entry_lines(body: str, tag: str):
 
         yield line
         
-def get_parser(header):
-    """ Return function that should parse this header"""
+def get_parser(header: str) -> Optional[Callable]:
+    """get_parser.
+
+    Return function that should parse this header
+    
+    Args:
+        header (str): Header to parse
+        
+    Returns:
+        Function that should parse this header
+    """
 
     parser_list = {"PROTEIN": parse_protein}
     if header in parser_list:
@@ -369,7 +378,7 @@ def parse_protein(body: str, enzymes: dict, tag: str, ec_num: str,
         })
 
 
-def process_entry(brenda_entry):
+def process_entry(brenda_entry: str) -> List[dict]:
     """process_entry.
 
     Processes a single BRENDA entry
@@ -461,7 +470,7 @@ def process_entry(brenda_entry):
     return reactions
 
 
-def parse_brenda(file_loc):
+def parse_brenda(file_loc: str) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """parse_brenda.
 
     Parses a BRENDA text file
@@ -470,7 +479,7 @@ def parse_brenda(file_loc):
         file_loc (str): Location of BRENDA download text file
 
     Return: 
-        Pandas dataframe containing EC numbers, lists of substrates and products, the reaction texts and the reversibility tag, as well as a dataframe of compounds
+        Tuple of two Pandas dataframes. The first dataframe contains EC numbers, lists of substrates and products, the reaction texts and the reversibility tag. The second dataframe contains compounds.
     """
     df = pd.DataFrame(columns=['EC_NUM','SUBSTRATES','PRODUCTS','RXN_TEXT','REVERSIBLE','ORIG_RXN_TEXT','NATURAL','ORGANISM','PROTEIN_REFS','PROTEIN_DB'])
 

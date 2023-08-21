@@ -1,4 +1,5 @@
 import re
+import rdkit
 from rdkit import Chem
 from rdkit import RDLogger 
 RDLogger.DisableLog('rdApp.*')
@@ -13,7 +14,9 @@ from collections import defaultdict
 import logging
 import os
 import subprocess
-from typing import List, Optional
+import pandas as pd
+import cirpy
+from typing import List, Optional, Dict, Tuple, Callable, Union
 
 from .helpers_rdkit import get_smi, get_tautomers, count_nonzero_charges, get_more_chiral
 
@@ -23,6 +26,7 @@ OPSIN_URL = "https://github.com/dan2097/opsin/releases/download/2.6.0/opsin-cli-
 #Old opsin location: OPSIN_URL = "https://bitbucket.org/dan2097/opsin/downloads/opsin-2.4.0-jar-with-dependencies.jar"
 TEMP_OPSIN_INPUT = ".opsin_temp_input.txt"
 TEMP_OPSIN_OUTPUT = ".opsin_temp_output.txt"
+
 
 def query_opsin(mols: List[str],
                 opsin_loc: Optional[str] = "opsin.jar") -> dict:
@@ -75,13 +79,13 @@ def query_opsin(mols: List[str],
                 if smiles:
                     mapping[mol] = smiles
 
-    # Deeete temp opsin files
+    # Delete temp opsin files
     if os.path.exists(TEMP_OPSIN_OUTPUT): os.remove(TEMP_OPSIN_OUTPUT)
     if os.path.exists(TEMP_OPSIN_INPUT): os.remove(TEMP_OPSIN_INPUT)
 
     return mapping
 
-def download_ftp(ftp_link: str, outfile: str):
+def download_ftp(ftp_link: str, outfile: str) -> None:
     """download_ftp.
 
     Args:
@@ -268,6 +272,26 @@ def query_pubchem(ids: list,
 
     return ret_dict
 
+def query_cirpy(ids: list) -> dict:
+    """query_cirpy.
+    
+    Query Cirpy for SMILES strings for a list of IDs
+    
+    Args:
+        ids (list): List of IDs to query
+        
+    Returns:
+        dict: Dictionary mapping IDs to SMILES strings
+    """
+    identifier_to_smiles = {}
+    for id_ in ids:
+        smiles = cirpy.resolve(id_, "smiles")
+        if smiles:
+            identifier_to_smiles[id_] = smiles
+        else:
+            identifier_to_smiles[id_] = []
+    return identifier_to_smiles
+
 def parse_brenda_ligand_inchi(brenda_ligand_file: str) -> dict:
     """parse_brenda_ligand_inchi.
 
@@ -327,7 +351,7 @@ def parse_brenda_ligand_chebi(brenda_ligand_file: str) -> dict:
                     pass
     return ret
 
-def swap_LS_DR(x):
+def swap_LS_DR(x: str) -> str:
     """swap_LS_DR.
 
     Swap L with S and D with R in string.
@@ -342,7 +366,7 @@ def swap_LS_DR(x):
     REPLACE_GROUP = r'([\(]{0,1})([LSRD])([\)]{0,1})([ -])'
     return re.sub(REPLACE_GROUP, lambda m: f"{m.group(1)+SWAP_MAP[m.group(2)]+m.group(3)+m.group(4)}", x)
 
-def comma_for_space(x):
+def comma_for_space(x: str) -> str:
     """comma_for_space.
 
     Swap comma for space in string.
@@ -355,7 +379,7 @@ def comma_for_space(x):
     """
     return x.replace(" ",",")
 
-def inchi_to_smiles_rdkit(compounds, alias, compound_to_inchi):
+def inchi_to_smiles_rdkit(compounds: List[str], alias: List[str], compound_to_inchi: Dict[str, str]) -> Dict[str, str]:
     """inchi_to_smiles_rdkit.
 
     Resolve name via InChi key to SMILES string via RDkit
@@ -381,7 +405,7 @@ def inchi_to_smiles_rdkit(compounds, alias, compound_to_inchi):
                 resolved[a] = [smiles]
     return resolved
 
-def inchi_to_smiles_pubchem(compounds, alias, compound_to_inchi):
+def inchi_to_smiles_pubchem(compounds: List[str], alias: List[str], compound_to_inchi: Dict[str, str]) -> Dict[str, str]:
     """inchi_to_smiles_pubchem.
 
     Resolve name via InChi key to SMILES string via PubChem Query
@@ -409,7 +433,58 @@ def inchi_to_smiles_pubchem(compounds, alias, compound_to_inchi):
 
     return resolved
 
-def name_to_smiles_opsin(compounds, alias, opsin_loc):
+def inchi_to_smiles_cirpy(compounds: List[str], alias: List[str], compound_to_inchi: Dict[str, str]) -> Dict[str, str]:
+    """inchi_to_smiles_cirpy.
+    Resolve name via InChi key to SMILES string via CirPy
+    
+    Args:
+        compounds (List[str]): List of InChI keys
+        alias (List[str]): List of names used in dictionary
+        compound_to_inchi (dict): Dictionary mapping names to InChi
+        
+    Returns:
+        dict: mapping between InChi keys and SMILES
+    """
+    resolved = {}
+    inchis = [compound_to_inchi.get(c.lower(), None) for c in compounds if compound_to_inchi.get(c.lower(), None) is not None]
+    
+    inchi_to_smiles = query_cirpy(inchis)
+        
+    for c,a in zip(compounds, alias):
+        resolved[a] = []
+        inchi = compound_to_inchi.get(c.lower(), None)
+        if inchi:
+            smiles = inchi_to_smiles[inchi]
+            if len(smiles) != 0:
+                resolved[a] = list(set(smiles))
+
+    return resolved
+
+def name_to_smiles_cirpy(compounds: List[str], alias: List[str]) -> Dict[str, str]:
+    """name_to_smiles_cirpy.
+    Resolve trivial name to SMILES string via CirPy
+    
+    Args:
+        compounds (List[str]): List of trivial names
+        alias (List[str]): List of names used in dictionary
+        
+    Returns:
+        dict: mapping between trivial names and SMILES
+    """
+    resolved = {}
+    names = [c.lower() for c in compounds]
+    
+    names_to_smiles = query_cirpy(names)
+        
+    for c,a in zip(compounds, alias):
+        resolved[a] = []
+        smiles = names_to_smiles[c.lower()]
+        if len(smiles) != 0:
+            resolved[a] = list(set(smiles))
+
+    return resolved
+
+def name_to_smiles_opsin(compounds: List[str], alias: List[str], opsin_loc: str) -> Dict[str, str]:
     """name_to_smiles_opsin.
 
     Resolve name via Opsin Query
@@ -434,7 +509,7 @@ def name_to_smiles_opsin(compounds, alias, opsin_loc):
 
     return resolved
 
-def chebi_to_smiles_pubchem(compounds, alias, compound_to_chebi):
+def chebi_to_smiles_pubchem(compounds: List[str], alias: List[str], compound_to_chebi: Dict[str, str], query_type: str='chebi') -> Dict[str, str]:
     """chebi_to_smiles_pubchem.
 
     Resolve name via CHEBI key to SMILES string via PubChem Query (direct)
@@ -443,6 +518,7 @@ def chebi_to_smiles_pubchem(compounds, alias, compound_to_chebi):
         compounds (List[str]): List of trivial names
         alias (List[str]): List of names used in dictionary
         compound_to_chebi (dict): Dictionary mapping names to CHEBI
+        query_type (str): Type of query to perform (default: 'chebi', options: 'chebi', 'synonym')
 
     Returns:
         dict: mapping between trivial names and SMILES
@@ -450,7 +526,7 @@ def chebi_to_smiles_pubchem(compounds, alias, compound_to_chebi):
     resolved = {}
     chebis = [compound_to_chebi.get(c.lower(), None) for c in compounds if compound_to_chebi.get(c.lower(), None) is not None]
     
-    chebi_to_smiles = query_pubchem(chebis, query_type='chebi', save_file='tmp.txt')
+    chebi_to_smiles = query_pubchem(chebis, query_type=query_type, save_file='tmp.txt')
         
     for c,a in zip(compounds, alias):
         resolved[a] = []
@@ -462,35 +538,7 @@ def chebi_to_smiles_pubchem(compounds, alias, compound_to_chebi):
 
     return resolved
 
-def chebi_to_smiles_pubchem_syn(compounds, alias, compound_to_chebi):
-    """chebi_to_smiles_pubchem_syn.
-
-    Resolve name via CHEBI key to SMILES string via PubChem Query (synonyms)
-
-    Args:
-        compounds (List[str]): List of trivial names
-        alias (List[str]): List of names used in dictionary
-        compound_to_chebi (dict): Dictionary mapping names to CHEBI
-
-    Returns:
-        dict: mapping between trivial names and SMILES
-    """
-    resolved = {}
-    chebis = [compound_to_chebi.get(c.lower(), None) for c in compounds if compound_to_chebi.get(c.lower(), None) is not None]
-    
-    chebi_to_smiles = query_pubchem(chebis, query_type='synonym', save_file='tmp.txt')
-        
-    for c,a in zip(compounds, alias):
-        resolved[a] = []
-        chebi = compound_to_chebi.get(c.lower(), None)
-        if chebi:
-            smiles = chebi_to_smiles[chebi]
-            if len(smiles) != 0:
-                resolved[a] = list(set(smiles))
-
-    return resolved    
-
-def name_to_smiles_pubchem(compounds, alias):
+def name_to_smiles_pubchem(compounds: List[str], alias: List[str]) -> Dict[str, str]:
     """name_to_smiles_pubchem.
 
     Resolve name to SMILES string via PubChem Query
@@ -514,25 +562,28 @@ def name_to_smiles_pubchem(compounds, alias):
 
     return resolved  
 
-def resolve(compounds, f, name):
+def resolve(compounds: List[str], f: Callable, name: str) -> Dict[str, str]:
     """resolve.
 
     Resolve a list of trivial names via a specified method
 
     Args:
         compounds (List[str]): List of trivial names
-        f: Lambda function with method to resolve trivial name to SMILES
+        f (Callable): Lambda function with method to resolve trivial name to SMILES
         name (str): Name of method
 
     Returns:
         dict: mapping between trivial names and SMILES
     """
     print(name)
-    resolved= f(compounds,compounds)
+
+    # Resolve via identity
+    resolved = f(compounds, compounds)
     print("... via identity:", len([c for c in compounds if resolved[c] != []]))
 
+    # resolve by adding comma in place of space in the name
     unresolved = [c for c in compounds if resolved[c] == []]
-    resolved_new = f([comma_for_space(c) for c in unresolved],unresolved)
+    resolved_new = f([comma_for_space(c) for c in unresolved], unresolved)
     ctr=0
     for c in resolved_new:
         if resolved[c] == [] and resolved_new[c] != []:
@@ -540,6 +591,7 @@ def resolve(compounds, f, name):
             ctr+=1
     print("... via comma for space:", ctr)
 
+    # resolve by swappin (R)- for (D)- and vice versa, and (S)- for (L)- and vice versa.
     unresolved = [c for c in compounds if resolved[c] == []]
     resolved_new = f([swap_LS_DR(c) for c in unresolved],unresolved)
     ctr=0
@@ -551,119 +603,133 @@ def resolve(compounds, f, name):
     
     return resolved
 
-def resolve_all(compound_df, file_loc_inchi, file_loc_chebi):
+def resolve_all(compound_df: pd.DataFrame, file_loc_inchi: str, file_loc_chebi: str) -> pd.DataFrame:
     """resolve_all.
 
     Resolve a list of trivial names via different methods
 
     Args:
-        compound_df (pandas.DataFrame): Pandas dataframe of compounds
+        compound_df (pd.DataFrame): Pandas dataframe of compounds
         file_loc_inchi (str): Path to BRENDA ligands file mapping names to InChis
         file_loc_chebi (str): Path to BRENDA ligands file mapping names to CHEBI keys
 
     Returns:
-        dict: Updated dataframe containing resolved SMILES columns
+        pd.DataFrame: Updated dataframe containing resolved SMILES columns
     """
-    compounds = list(compound_df['compound'].values)
+    # create a copy of the dataframe
+    compound_df_new = compound_df.copy(deep=True)
 
-    compound_to_inchi=parse_brenda_ligand_inchi(file_loc_inchi)
-    compound_to_chebi=parse_brenda_ligand_chebi(file_loc_chebi)
+    # a list of all the compounds
+    compounds = list(compound_df_new['compound'].values)
 
+    # two dictionaries mapping compounds to InChIs and CHEBI keys
+    compound_to_inchi = parse_brenda_ligand_inchi(file_loc_inchi)
+    compound_to_chebi = parse_brenda_ligand_chebi(file_loc_chebi)
+
+    # a list of all the methods to resolve trivial names to SMILES
     resolve_methods = {
         'smiles_via_inchi_rdkit': lambda x, y: inchi_to_smiles_rdkit(x, y, compound_to_inchi),
         'smiles_via_inchi_pubchem': lambda x, y: inchi_to_smiles_pubchem(x, y, compound_to_inchi),
-        'smiles_via_chebi_pubchem': lambda x, y: chebi_to_smiles_pubchem(x, y, compound_to_chebi),
-        'smiles_via_chebi_pubchem_syn': lambda x, y: chebi_to_smiles_pubchem_syn(x, y, compound_to_chebi),
+        'smiles_via_inchi_cirpy': lambda x, y: inchi_to_smiles_cirpy(x, y, compound_to_inchi),
+        'smiles_via_chebi_pubchem': lambda x, y: chebi_to_smiles_pubchem(x, y, compound_to_chebi, 'chebi'),
+        'smiles_via_chebi_pubchem_syn': lambda x, y: chebi_to_smiles_pubchem(x, y, compound_to_chebi, 'synonym'),
         'smiles_via_name_opsin': lambda x, y: name_to_smiles_opsin(x, y, "opsin.jar"),
         'smiles_via_name_pubchem': lambda x, y: name_to_smiles_pubchem(x, y),
+        'smiles_via_name_cirpy': lambda x, y: name_to_smiles_cirpy(x, y),
     }
 
-    for name in resolve_methods:
-        f = resolve_methods[name]
-        resolved = resolve(compounds, f, name)
-        compound_df[name] = compound_df['compound'].map(resolved)
+    # Resolve trivial names to SMILES via each method and add as a new column to the dataframe
+    for method_name, method_function in resolve_methods.items():
+        resolved_smiles = resolve(compounds, method_function, method_name)
+        compound_df_new[method_name] = compound_df_new['compound'].map(resolved_smiles)
 
-    resolved_columns = [x for x in compound_df.keys() if 'smiles_via' in x]
-    compound_df['smiles_all'] = [[]]*len(compound_df)
-    for i in resolved_columns:
-        compound_df['smiles_all'] = compound_df['smiles_all'] + compound_df[i]
-    compound_df['smiles_all'] = [list(set(x)) for x in compound_df['smiles_all'].values]
+    # Combine all the resolved SMILES columns into one column
+    resolved_columns = [column for column in compound_df.keys() if 'smiles_via' in column]
+    compound_df_new['smiles_all'] = pd.Series([[]]*len(compound_df_new), index=compound_df_new.index)
 
-    print("Unresolved:",sum([x == [] for x in compound_df['smiles_all']]))
-    print("Resolved:",sum([x != [] for x in compound_df['smiles_all']]))
-    print("Resolved via INCHI RDKIT:",sum([x != [] for x in compound_df['smiles_via_inchi_rdkit']]))
-    print("Resolved via INCHI PUBCHEM:",sum([x != [] for x in compound_df['smiles_via_inchi_pubchem']]))
-    print("Resolved via CHEBI PUBCHEM:",sum([x != [] for x in compound_df['smiles_via_chebi_pubchem']])) 
-    print("Resolved via CHEBI PUBCHEM SYN:",sum([x != [] for x in compound_df['smiles_via_chebi_pubchem_syn']]))
-    print("Resolved via NAME PUBCHEM:",sum([x != [] for x in compound_df['smiles_via_name_pubchem']]))
-    print("Resolved via NAME OPSIN:",sum([x != [] for x in compound_df['smiles_via_name_opsin']]))
+    for column in resolved_columns:
+        compound_df_new['smiles_all'] += compound_df_new[column]
 
-    return compound_df
+    # Remove duplicates from 'smiles_all' column
+    compound_df_new['smiles_all'] = compound_df_new['smiles_all'].apply(set).apply(list)
+    # print out some statistics
+    print("Unresolved:", sum([x == [] for x in compound_df_new['smiles_all']]))
+    print("Resolved:", sum([x != [] for x in compound_df_new['smiles_all']]))
+    print("Resolved via INCHI RDKIT:", sum([x != [] for x in compound_df_new['smiles_via_inchi_rdkit']]))
+    print("Resolved via INCHI PUBCHEM:", sum([x != [] for x in compound_df_new['smiles_via_inchi_pubchem']]))
+    print("Resolved via INCHI CIRPY:", sum([x != [] for x in compound_df_new['smiles_via_inchi_cirpy']]))
+    print("Resolved via CHEBI PUBCHEM:", sum([x != [] for x in compound_df_new['smiles_via_chebi_pubchem']])) 
+    print("Resolved via CHEBI PUBCHEM SYN:", sum([x != [] for x in compound_df_new['smiles_via_chebi_pubchem_syn']]))
+    print("Resolved via NAME PUBCHEM:", sum([x != [] for x in compound_df_new['smiles_via_name_pubchem']]))
+    print("Resolved via NAME OPSIN:", sum([x != [] for x in compound_df_new['smiles_via_name_opsin']]))
+    print("Resolved via NAME CIRPY:", sum([x != [] for x in compound_df_new['smiles_via_name_cirpy']]))
 
-def standardize_compound_df(compound_df):
+    return compound_df_new
+
+def standardize_compound_df(compound_df: pd.DataFrame) -> pd.DataFrame:
     """standardize_compound_df.
 
-    Standardize SMILES strings
+    Standardize SMILES strings using RDKit
 
     Args:
-        compound_df (pandas.DataFrame): Pandas dataframe of compounds and their resolved SMILES strings
+        compound_df (pd.DataFrame): Pandas dataframe of compounds and their resolved SMILES strings
 
     Returns:
-        dict: Updated dataframe containing updated SMILES column
+        pd.DataFrame: Updated dataframe containing updated SMILES column
     """   
     valid = []
-    for l in compound_df['smiles_all']:
-        l2 = []
-        for x in l:
+    for smile in compound_df['smiles_all']:
+        std_smile = []
+        for x in smile:
             try:
-                l2.append(Chem.MolToSmiles(Chem.MolFromSmiles(x)))
+                std_smile.append(Chem.MolToSmiles(Chem.MolFromSmiles(x)))
             except:
                 pass
-        valid.append(list(set(l2)))
+        valid.append(list(set(std_smile)))
     compound_df['smiles_all'] = valid
 
     neutral = []
-    for i,l in enumerate(compound_df['smiles_all']):
-        print(i,end='\r')
-        if l != []:
+    for i, smile in enumerate(compound_df['smiles_all']):
+        print(i, end='\r')
+        if smile != []:
             #Standardize, neutralize, canonicalize
-            l2 = list(set([get_smi(x) for x in l]))
-            l2 = [x for x in l2 if x]
+            std_smile = list(set([get_smi(x) for x in smile]))
+            std_smile = [x for x in std_smile if x]
         
             #Tautomerize a few common forms, try to use best SMILES option
-            if l2 != []:
-                l2 = list(set([get_tautomers(x) for x in l2]))
-                if len(l2)>1:
+            if std_smile != []:
+                std_smile = list(set([get_tautomers(x) for x in std_smile]))
+                if len(std_smile)>1:
                     #If multiple smiles options, use those with lowest count of molecules
-                    counts = [len(smi.split(".")) for smi in l2]
+                    counts = [len(smi.split(".")) for smi in std_smile]
                     indices = [i for i, x in enumerate(counts) if x == min(counts)]
-                    l2 = [l2[i] for i in indices]
+                    std_smile = [std_smile[i] for i in indices]
         
                     #If multiple smiles options, use those with lowest number of nonzero charges
-                    counts = [count_nonzero_charges(Chem.MolFromSmiles(smi)) for smi in l2]
+                    counts = [count_nonzero_charges(Chem.MolFromSmiles(smi)) for smi in std_smile]
                     indices = [i for i, x in enumerate(counts) if x == min(counts)]
-                    l2 = [l2[i] for i in indices]
+                    std_smile = [std_smile[i] for i in indices]
             
                     #If multiple smiles options, use those with larger number of chiral atoms and bonds if achiral mols are the same
-                    l2 = get_more_chiral(l2)     
+                    std_smile = get_more_chiral(std_smile)     
         else:
-            l2 = []
-        neutral.append(l2)
+            std_smile = []
+        neutral.append(std_smile)
     compound_df['smiles_neutral'] = neutral
 
 
     return compound_df
 
-def manual_corrections_compounds(compound_df):
+def manual_corrections_compounds(compound_df: pd.DataFrame) -> pd.DataFrame:
     """manual_corrections_compounds.
 
     Manual corrections of compounds that are wrong in BRENDA.
 
     Args:
-        compound_df (pandas.DataFrame): Pandas dataframe of compounds and their resolved SMILES strings
+        compound_df (pd.DataFrame): Pandas dataframe of compounds and their resolved SMILES strings
 
     Returns:
-        dict: Updated dataframe 
+        pd.DataFrame: Updated dataframe 
     """  
     corrected={}
     corrected['acceptor']=[]
