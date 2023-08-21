@@ -1,10 +1,11 @@
 """Provide the primary functions."""
 
-from . import helpers_brenda, helpers_resolve_smiles, helpers_rdkit, helpers_map
+from enzymemap import helpers_brenda, helpers_resolve_smiles, helpers_rdkit, helpers_map
 import itertools
 import pandas as pd
+from typing import Dict, Tuple
 
-def make_initial(file_loc, file_loc_inchi, file_loc_chebi, manual_corrections=False):
+def make_initial(file_loc: str, file_loc_inchi: str, file_loc_chebi: str, manual_corrections: bool = False) -> Tuple[pd.DataFrame, Dict[str, str]]:
     """make_initial.
 
     Function to read BRENDA database and resolve names to SMILES.
@@ -16,23 +17,29 @@ def make_initial(file_loc, file_loc_inchi, file_loc_chebi, manual_corrections=Fa
         manual_corrections (bool): Whether to add a set of manual corrections for SMILES entries. Do not use for custom datasets.
 
     Returns:
-        Pandas Dataframes of uncorrected, raw reactions and compound to smiles dictionary
+        Tuple containing a Pandas Dataframe of uncorrected, raw reactions and a dictionary mapping compounds to smiles
     """
-
+    # parse the BRENDA flatfile
     df, compounds_df = helpers_brenda.parse_brenda(file_loc)
 
+    # obtain SMILES from compound names ond use to update the dataframe
     compound_df = helpers_resolve_smiles.resolve_all(compounds_df, file_loc_inchi, file_loc_chebi)
+
+    # stadardize the smiles and try to get the best representation for each compound
     compound_df = helpers_resolve_smiles.standardize_compound_df(compound_df)
+
+    # apply manual corrections
     if manual_corrections:
         compound_df = helpers_resolve_smiles.manual_corrections_compounds(compound_df)
 
+    # create a dictionary mapping compound names to smiles
     compound_to_smiles={}
     for i in compound_df.index:
         compound_to_smiles[compound_df['compound'][i]] = compound_df['smiles_neutral'][i]
     
+    # Make all possible reactions from different compound_to_smiles results (for the different substrates and products)
     reactions = []
     for i in df.index:
-        #Make all possible reactions from different compound_to_smiles results
         reacs = [".".join(x) for x in list(itertools.product(*[compound_to_smiles[x] for x in df['SUBSTRATES'][i]]))]
         prods = [".".join(x) for x in list(itertools.product(*[compound_to_smiles[x] for x in df['PRODUCTS'][i]]))]
         reaction = [">>".join(x) for x in list(itertools.product(*[reacs, prods]))]
@@ -40,18 +47,19 @@ def make_initial(file_loc, file_loc_inchi, file_loc_chebi, manual_corrections=Fa
         reactions.append(reaction)
     df['POSSIBLE_RXNS'] = reactions
 
+    # get dictonaries to convert between reduced and oxidized forms of compounds
     reduced_to_oxidized, oxidized_to_reduced = helpers_rdkit.get_strip_list(compound_to_smiles)
     
     # Correct and balance reactions
-    cached=dict()
+    cached = dict()
     print("Correcting and balancing")
     balanced_rxn_list = []
     for i in df.index:
-        print(i,end='\r')
+        print(i, end='\r')
         if df['RXN_TEXT'][i] not in cached:
             rxns = helpers_rdkit.correct_reaction(df['POSSIBLE_RXNS'][i], df['RXN_TEXT'][i], reduced_to_oxidized, oxidized_to_reduced)
             rxns = [helpers_rdkit.put_h_last(r) for r in rxns]
-            cached[df['RXN_TEXT'][i]]=rxns
+            cached[df['RXN_TEXT'][i]] = rxns
         else:
             rxns = cached[df['RXN_TEXT'][i]]
         balanced_rxn_list.append(rxns)
@@ -62,17 +70,17 @@ def make_initial(file_loc, file_loc_inchi, file_loc_chebi, manual_corrections=Fa
     
     return df, compound_to_smiles
 
-def map_group(df, db_rules):
+def map_group(df: pd.DataFrame, db_rules: pd.DataFrame) -> pd.DataFrame:
     """map_group.
 
     Processes a group of reactions, usually within an EC number, to obtain corrected reactions and atom-mappings via single step reactions, multi step reactions or suggested reactions.
 
     Args:
-        df: Pandas dataframe with current reactions within an EC number, as output by the make_initial function.
-        db_rules: Pandas dataframe of rules to use for mapping.
+        df (pd.DataFrame): Pandas dataframe with current reactions within an EC number, as output by the make_initial function.
+        db_rules (pd.DataFrame): Pandas dataframe of rules to use for mapping.
 
     Returns:
-        Pandas Dataframes of reactions
+        pd.DataFrame: Pandas Dataframes of reactions
     """
 
     groups = helpers_map.get_groups(db_rules)
@@ -172,7 +180,7 @@ def map_group(df, db_rules):
     
     return df
 
-def get_data():
+def get_data() -> pd.DataFrame:
     """get_data.
 
     Downloads the processed EnzymeMap database dataframe.

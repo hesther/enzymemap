@@ -1,4 +1,5 @@
-from .helpers_rdkit import chiral, achiral, unmap, get_balance
+from enzymemap.helpers_rdkit import chiral, achiral, unmap, get_balance
+import rdkit
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit import DataStructs
@@ -9,6 +10,7 @@ from copy import deepcopy
 from rdchiral.template_extractor import extract_from_reaction
 from rdchiral.main import rdchiralRun, rdchiralReaction, rdchiralReactants
 import pandas as pd
+from typing import List, Tuple, Dict, Union
 
 class Reaction():
     """
@@ -24,7 +26,7 @@ class Reaction():
         self.mapNoToReactant = mapNoToReactant
 
 class Reactants_old():
-    def __init__(self,smi,remap=True):
+    def __init__(self, smi,remap=True):
         self.reactants = [Chem.MolFromSmiles(x) for x in smi.split('.')]
         if remap:
             n=0
@@ -35,7 +37,7 @@ class Reactants_old():
             for reac in self.reactants:
                 [a.SetAtomMapNum(a.GetAtomMapNum()+1000) for a in reac.GetAtoms()]
                 
-def delete_dupl(reac, prod):
+def delete_dupl(reac: str, prod: str) -> str:
     """delete_dupl.
 
     Delete molecules that occur on the reactant and product site
@@ -55,7 +57,7 @@ def delete_dupl(reac, prod):
     
     return new_reacs + ">>" + new_prods
 
-def balance_rxn_protons(rxn_smi,diff_h,diff_h2):
+def balance_rxn_protons(rxn_smi: str, diff_h: int, diff_h2: int) -> str:
     """balance_rxn_protons.
 
     Add protons back to reaction string (needed to be previously balanced!).
@@ -79,17 +81,17 @@ def balance_rxn_protons(rxn_smi,diff_h,diff_h2):
         prod+=abs(diff_h2)*'.[H][H]' 
     return reac + ">>" + prod
 
-def reactionFromPermutations(rxn, reactants):
+def reactionFromPermutations(rxn: Reaction, reactants: Reactants_old) -> Tuple[Dict[str, List[str]], List[str]]:
     """reactionFromPermutations.
 
     Create reactions from all possible permutations of reactants
 
     Args:
-        rxn: RDchiral reaction object
-        reactants: RDchiral reactant object
+        rxn (Reaction): RDchiral reaction object
+        reactants (Reactants_old): RDchiral reactant object
 
     Returns:
-        List(str), List(str): List of mapped and unmapped reaction SMILES
+        Tuple[Dict[str, List[str]], List[str]]: Tuple of a dictionary mapping unmapped reaction SMILES to a list of mapped reaction SMILES, and a list of unique mapped reaction SMILES
     """    
     rxns = {}
     unique = []
@@ -108,16 +110,16 @@ def reactionFromPermutations(rxn, reactants):
                 unique.append(rxn_smi)
     return rxns, unique
 
-def renumber(tres):
+def renumber(tres: Chem.rdChemReactions.ChemicalReaction) -> Chem.rdChemReactions.ChemicalReaction:
     """renumber.
 
     Renumbers atom map numbers of reaction
 
     Args:
-        tres: RDKit reaction object
+        tres (Chem.rdChemReactions.ChemicalReaction): RDKit reaction object
 
     Returns:
-        RDKit reaction object
+        Chem.rdChemReactions.ChemicalReaction: RDKit reaction object
     """      
     roles = [tres.GetReactants(), tres.GetProducts()]
     mapnums = sorted(set([a.GetAtomMapNum() for role in roles for mol in role for a in mol.GetAtoms()]))
@@ -125,17 +127,17 @@ def renumber(tres):
     [a.SetAtomMapNum(old_to_new[a.GetAtomMapNum()]) for role in roles for mol in role for a in mol.GetAtoms()]
     return tres
 
-def createReactionInstance(rxn,reactants):   
+def createReactionInstance(rxn: Reaction, reactants: List[Chem.rdchem.Mol]) -> List[Chem.rdChemReactions.ChemicalReaction]:   
     """createReactionInstance.
 
     For one specific permutation of reactants, create reactions
 
     Args:
-        rxn: RDChiral reaction
-        reactants: List of reactants
+        rxn (Reaction): RDChiral reaction
+        reactants (List[Chem.rdchem.Mol]): List of reactants
 
     Returns:
-        List of reactions
+        List[Chem.rdChemReactions.ChemicalReaction]: List of reactions
     """
     res = []
     try:
@@ -161,7 +163,7 @@ def createReactionInstance(rxn,reactants):
         res.append(tres)
     return res
 
-def has_correct(rxn_smi):
+def has_correct(rxn_smi: str) -> bool:
     """has_correct.
 
     Check whether the reaction can be reproduced by extracting an RDChiral template and applying it
@@ -183,7 +185,7 @@ def has_correct(rxn_smi):
     except:
         return False
 
-def get_template(rxn_smi, radius=1, nsg=True):
+def get_template(rxn_smi: str, radius: int = 1, nsg: bool = True) -> str:
     """get_template.
 
     Extract RDChiral template
@@ -191,13 +193,13 @@ def get_template(rxn_smi, radius=1, nsg=True):
     Args:
         rxn_smi (str): reaction SMILES
         radius (int): Radius of rule
-        nsg (int): Whether to exclude special groups
+        nsg (bool): Whether to exclude special groups
 
     Returns:
-        RDChiral template
+        str: RDChiral template
     """
     rxn_split = rxn_smi.split(">")
-    reaction={"_id":0,"reactants":rxn_split[2],"spectator":rxn_split[1],"products":rxn_split[0]}
+    reaction = {"_id":0,"reactants":rxn_split[2],"spectator":rxn_split[1],"products":rxn_split[0]}
     try:
         template = extract_from_reaction(reaction, radius=radius, no_special_groups=nsg)["reaction_smarts"]
         template = "(" + template.replace(">>", ")>>")
@@ -205,7 +207,7 @@ def get_template(rxn_smi, radius=1, nsg=True):
         template = None
     return template
 
-def propose_new(rxn_smi):
+def propose_new(rxn_smi: str) -> Union[str, None]:
     """propose_new.
 
     Tries to correct stereochemistry in a reaction
@@ -261,7 +263,7 @@ def propose_new(rxn_smi):
         return None
     
 @timeout_decorator.timeout(30)
-def get_mapped_reacs(reacs, prods, rules):
+def get_mapped_reacs(reacs: str, prods: str, rules: pd.DataFrame) -> Tuple[str, str, int]:
     """get_mapped_reacs.
 
     Map reaction via single rule application
@@ -272,7 +274,7 @@ def get_mapped_reacs(reacs, prods, rules):
         rules (pandas.DataFrame): Pandas Dataframe of reaction rules
 
     Returns:
-        str, str, int: Mapped reaction SMILES, SMARTS rule, rule id
+        Tuple[str, str, int]: Mapped reaction SMILES, SMARTS rule, rule id
     """
     #Remove protons since they don't get treated correctly in the reaction rules from Broadbelt et al
     diff_h = reacs.split(".").count('[H+]') - prods.split(".").count('[H+]')
@@ -327,7 +329,7 @@ def get_mapped_reacs(reacs, prods, rules):
 
     return None, None, None
 
-def initial_map(smi):
+def initial_map(smi: str) -> Tuple[str, List[Chem.rdchem.Mol]]:
     """inital_map.
 
     Make map numbers for an unmapped compound
@@ -336,7 +338,7 @@ def initial_map(smi):
         smi (str): SMILES string
 
     Returns:
-        str, List: SMILES string, list of individual molecules
+        Tuple[str, List[Chem.rdchem.Mol]]: SMILES string, list of individual molecules
     """
     r = [Chem.MolFromSmiles(x) for x in smi.split(".")]
     ctr=1
@@ -347,22 +349,22 @@ def initial_map(smi):
     return ".".join([Chem.MolToSmiles(x) for x in r]), r
 
 @timeout_decorator.timeout(20)
-def createReactionInstance_multi(rxn,reactants_unshuffled): 
+def createReactionInstance_multi(rxn: Reaction, reactants_unshuffled: List[Chem.rdchem.Mol]) -> Tuple[List[Chem.rdChemReactions.ChemicalReaction], List[int]]: 
     """createReactionInstance.
 
-    For one specific permutation of reactants, create reactions intended for multi-step rule applciations (which need to track atoms differently)
+    For one specific permutation of reactants, create reactions intended for multi-step rule applications (which need to track atoms differently)
 
     Args:
         rxn: RDChiral reaction
         reactants_unshuffled: List of reactants
 
     Returns:
-        List of reactions, list of update in mapnumbers
+        Tuple[List[Chem.rdChemReactions.ChemicalReaction], List[int]]: List of reactions, list of update in mapnumbers
     """
     res = []
     changed =[]
     for old_reactants in itertools.permutations(reactants_unshuffled):
-        if len(old_reactants)>rxn.rxn.GetNumReactantTemplates():
+        if len(old_reactants) > rxn.rxn.GetNumReactantTemplates():
             reactants = old_reactants[:rxn.rxn.GetNumReactantTemplates()]
             unused_reactants = old_reactants[rxn.rxn.GetNumReactantTemplates():]
         else:
@@ -398,13 +400,13 @@ def createReactionInstance_multi(rxn,reactants_unshuffled):
                 changed.append(updated_mnos)
     return res, changed
 
-def is_valid_molecules(tres):
+def is_valid_molecules(tres: Chem.rdChemReactions.ChemicalReaction) -> bool:
     """is_valid_molecules.
 
     Check whether molecules in reaction string are all valid in RDKit
 
     Args:
-        tres: RDKit reaction
+        tres (Chem.rdChemReactions.ChemicalReaction): RDKit reaction
 
     Returns:
         bool: Boolean whether molecules in reaction are valid
@@ -417,7 +419,7 @@ def is_valid_molecules(tres):
             return False
     return True
 
-def make_mol_from_mapped(smi):
+def make_mol_from_mapped(smi: str) -> List[rdkit.Chem.Mol]:
     """make_mol_from_mapped.
 
     This is necessary because rdkit discerns betweet "default implicit hydrogens", e.g from smi='C' and
@@ -429,7 +431,7 @@ def make_mol_from_mapped(smi):
         smi (str): SMILES string
 
     Returns:
-        List(rdkit.Chem.mol): List of RDKit molecules
+        List(rdkit.Chem.Mol): List of RDKit molecules
     """
 
     mols = []
@@ -444,7 +446,7 @@ def make_mol_from_mapped(smi):
     return mols
 
 
-def get_multistep(rxn, reac_smi, true_prod_smi,MAX_STEPS=2):
+def get_multistep(rxn: Reaction, reac_smi: str, true_prod_smi: str, MAX_STEPS: int = 2) -> Tuple[List[str], List[str], List[int]]:
     """get_multistep.
 
     Get atom mapping via multiple mapping steps
@@ -456,7 +458,7 @@ def get_multistep(rxn, reac_smi, true_prod_smi,MAX_STEPS=2):
         MAX_STEPS (int): maximum number of consecutive steps
 
     Returns:
-        List, List, List: List of mapped reactions, corresponding rules and changed atoms
+        Tuple[List[str], List[str], List[int]]: List of mapped reactions, corresponding rules and changed atoms
     """
     reac_smi, reac_mol = initial_map(reac_smi)
     mapped = [(reac_smi, reac_mol, [[]])]
@@ -533,19 +535,19 @@ def get_multistep(rxn, reac_smi, true_prod_smi,MAX_STEPS=2):
 
     return list(overall.values()), [individual[k]['rxn'] for k in individual.keys()], [individual[k]['changed'] for k in individual.keys()]
 
-def correct_stereochem(changed_atoms_nos, mol1, mol3, mol2):
+def correct_stereochem(changed_atoms_nos: List[int], mol1: rdkit.Chem.rdchem.Mol, mol3: rdkit.Chem.rdchem.Mol, mol2: rdkit.Chem.rdchem.Mol) -> rdkit.Chem.rdchem.Mol:
     """correct_stereochem.
 
     Correct stereochemistry for two-step reactions for intermediats
 
     Args:
-        changed_atoms_nos: Numbers of changed atoms in the reactions
-        mol1: RDKit molecule (before first step)
-        mol2: RDKit molecule (after first step)
-        mol3: RDKit molecule (after second step)
+        changed_atoms_nos (List[int]): Numbers of changed atoms in the reactions
+        mol1 (rdkit.Chem.rdchem.Mol): RDKit molecule (before first step)
+        mol2 (rdkit.Chem.rdchem.Mol): RDKit molecule (after first step)
+        mol3 (rdkit.Chem.rdchem.Mol): RDKit molecule (after second step)
 
     Returns:
-        Corrected molecule of intermediates
+        rdkit.Chem.rdchem.Mol: Corrected molecule of intermediates
     """
     d_mol1 = {}
     for atom in mol1.GetAtoms():
@@ -564,7 +566,7 @@ def correct_stereochem(changed_atoms_nos, mol1, mol3, mol2):
     return mol2
 
 @timeout_decorator.timeout(60)
-def get_mapped_reacs_multi(reacs, prods, rules, MAX_STEPS=2): 
+def get_mapped_reacs_multi(reacs: str, prods: str, rules: pd.DataFrame, MAX_STEPS: int = 2) -> Tuple[str, str, int, List[str]]: 
     """get_mapped_reacs_multi.
 
     Allows for multistep reactions (up to MAX_STEPS) and extracts the overall reactions
@@ -579,11 +581,8 @@ def get_mapped_reacs_multi(reacs, prods, rules, MAX_STEPS=2):
         MAX_STEPS (int): maximum number of steps for mapping
 
     Returns:
-        str, str, int, List(str): Mapped reaction SMILES, SMARTS rule, rule id, List of single-step reactions
-    """
-
-
-    
+        Tuple[str, str, int, List[str]]: Mapped reaction SMILES, SMARTS rule, rule id, List of single-step reactions
+    """  
     #Remove protons since they don't get treated correctly in the reaction rules from Broadbelt et al
     diff_h = reacs.split(".").count('[H+]') - prods.split(".").count('[H+]')
     diff_h2 = reacs.split(".").count('[H][H]') - prods.split(".").count('[H][H]')
@@ -640,18 +639,18 @@ def get_mapped_reacs_multi(reacs, prods, rules, MAX_STEPS=2):
             
     return None, None, None, None
 
-def map(rxns, rules, single=True):
+def map(rxns: List[str], rules: pd.DataFrame, single: bool = True) -> Tuple[List[str], List[str], List[int], List[List[str]]]:
     """map.
 
     Map reactions via single or multi-step rule application
 
     Args:
-        rxns (List(str)): List of reaction SMILES
-        rules (pandas.DataFrame): Pandas Dataframe of reaction rules
+        rxns (List[str]): List of reaction SMILES
+        rules (pd.DataFrame): Pandas Dataframe of reaction rules
         single (bool): Whether to only allow single-step reactions
 
     Returns:
-        List(str), List(str), List(int), List(List(str)): Mapped reaction SMILES, SMARTS rule, rule id, List of single-step reactions
+        Tuple[List[str], List[str], List[int], List[List[str]]]: Mapped reaction SMILES, SMARTS rule, rule id, List of single-step reactions
     """
     
     res=[]
@@ -701,16 +700,16 @@ def map(rxns, rules, single=True):
     return res, rls, iis, indis       
 
 
-def make_templates_for_suggestions(reactions_in_ec):
+def make_templates_for_suggestions(reactions_in_ec: List[str]) -> Tuple[List[rdchiralReaction], Dict, Dict, List[str]]:
     """make_templates_for_suggestions.
 
     Make very general RDChiral templates for suggesting alternate products for unbalanced or unmapped reactions
 
     Args:
-        reactions_in_ec (List(str)): List of reaction SMILES
+        reactions_in_ec (List[str]): List of reaction SMILES
 
     Returns:
-        List(rdchiralReaction), dict, dict, List(str): List of reactions, dictionary with hydrogen counts, dictionary with reactants, sorted templates
+        Tuple[List[rdchiralReaction], Dict, Dict, List[str]]: List of reactions, dictionary with hydrogen counts, dictionary with reactants, sorted templates
     """
 
     templates = [get_template(x, radius=0, nsg=True) for x in reactions_in_ec]
@@ -731,7 +730,7 @@ def make_templates_for_suggestions(reactions_in_ec):
 
     return templates, temp2h, temp2reac, template_s
 
-def compute_sim(p, r, reactions):
+def compute_sim(p: str, r: str, reactions: List[str]) -> int:
     """compute_sim.
 
     Computes fingerprint similarities to all reactions
@@ -739,7 +738,7 @@ def compute_sim(p, r, reactions):
     Args:
         p (str): SMILES of product
         r (str): SMILES of reactant
-        reactions (List(str)): List of reaction SMILES
+        reactions (List[str]): List of reaction SMILES
 
     Returns:
         int: maximum similarity to reference reactions
@@ -759,17 +758,17 @@ def compute_sim(p, r, reactions):
     return max(sims)
 
 @timeout_decorator.timeout(20)
-def suggest_corrections(rxns, templates, temp2h, temp2reac, template_s):
+def suggest_corrections(rxns: List[str], templates: List[rdchiralReaction], temp2h: Dict, temp2reac: Dict, template_s: List[str]) -> List[str]:
     """suggest_corrections.
 
     Suggest reactions for unmapped or unbalanced entries
 
     Args:
-        rxns: List of reactions
-        templates: reaction templates
-        temp2h: dictionary with hydrogen counts
-        temp2reac: dictionary with reactants
-        template_s: sorted templates
+        rxns (List[str]): List of reactions
+        templates (List[rdchiralReaction]): reaction templates
+        temp2h (Dict): dictionary with hydrogen counts
+        temp2reac (Dict): dictionary with reactants
+        template_s (List[str]): sorted templates
 
     Returns:
         List(str): List of possible reactions
@@ -797,16 +796,16 @@ def suggest_corrections(rxns, templates, temp2h, temp2reac, template_s):
             all_outcomes.append(None)
     return [x for x in all_outcomes if x is not None]
 
-def get_groups(rules):
+def get_groups(rules: pd.DataFrame) -> List[List[int]]:
     """get_groups.
 
     Get group of reactions rules that catalyze the same reactions (in forward and reverse direction)
 
     Args:
-        rules: Pandas dataframe of rules
+        rules (pd.DataFrame): Pandas dataframe of rules
 
     Returns:
-        List of rule groups
+        List[List[int]]: List of rule groups
     """
     groups = []
     done = set()
@@ -819,17 +818,17 @@ def get_groups(rules):
             done.update(update)
     return groups
 
-def probably_reversible(df, rules):
+def probably_reversible(df: pd.DataFrame, rules: pd.DataFrame) -> List[str]:
     """probably_reversible.
 
     Suggest reversibility if reversible tag (reversible or irreversible) is not specified
 
     Args:
-        df: Pandas dataframe
-        rules: Pandas dataframe of rules
+        df (pd.DataFrame): Pandas dataframe
+        rules (pd.DataFrame): Pandas dataframe of rules
 
     Returns:
-        List of suggested reversibility tags
+        List[str]: List of suggested reversibility tags
     """
     prob_rev=[]
     for i in df.index:
@@ -853,7 +852,7 @@ def probably_reversible(df, rules):
         prob_rev.append(p)
     return prob_rev
 
-def standardize_mapping_rxn(rxn_smi):
+def standardize_mapping_rxn(rxn_smi: str) -> str:
     """standardize_mapping_rxn.
 
     Standardizes a reaction mapping
@@ -891,7 +890,7 @@ def standardize_mapping_rxn(rxn_smi):
     
     return r + ">>" + p
 
-def reverse(r):
+def reverse(r: str) -> str:
     """reverse.
 
     Reverse reaction
@@ -902,19 +901,19 @@ def reverse(r):
     Returns:
         str: Reversed reaction SMILES
     """
-    a,b,c=r.split('>')
+    a,b,c = r.split('>')
     return '>'.join([c,b,a])
 
-def make_final(df):
+def make_final(df: pd.DataFrame) -> pd.DataFrame:
     """make_final.
 
     Construct final dataframe with new rows for each reaction, add reversible reactions
 
     Args:
-        df: Pandas Dataframe
+        df (pd.DataFrame): Pandas Dataframe
 
     Returns:
-        New dataframe with reactions on separate rows instead of lists within cells
+        pd.DataFrame: New dataframe with reactions on separate rows instead of lists within cells
     """
     orig_rxn_text = []
     mapped = []
@@ -1024,16 +1023,16 @@ def make_final(df):
 
     return df_final
 
-def map_isomerase(rxn):
+def map_isomerase(rxn: str) -> Union[str, None]:
     """map_isomerase.
 
     Check whether the rxn only contains stereochemical changes
 
     Args:
-        rxn: Reaction SMILES
+        rxn (str): Reaction SMILES
 
     Returns:
-        Changed reaction SMILES or None
+        Union[str, None]: Changed reaction SMILES or None
     """
     r,_,p=rxn.split(">")
     if achiral(r)==achiral(p):
