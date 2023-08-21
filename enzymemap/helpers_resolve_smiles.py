@@ -327,7 +327,7 @@ def parse_brenda_ligand_chebi(brenda_ligand_file: str) -> dict:
                     pass
     return ret
 
-def swap_LS_DR(x):
+def swap_LS_DR(x: str) -> str:
     """swap_LS_DR.
 
     Swap L with S and D with R in string.
