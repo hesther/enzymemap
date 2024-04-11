@@ -5,7 +5,7 @@ Python package to atom-map, correct and suggest enzymatic reactions
 
 ### Cite us
 
-If you use EnzymeMap, please cite our publication "EnzymeMap: Curation, validation and data-driven prediction of enzymatic reactions" by E. Heid, D. Probst, W. H. Green and G. K. H. Madsen. Check our preprint on [ChemRxiv](https://doi.org/10.26434/chemrxiv-2023-jzw9w).
+If you use EnzymeMap, please cite our publication ["EnzymeMap: Curation, validation and data-driven prediction of enzymatic reactions"](https://doi.org/10.1039/D3SC02048G) by E. Heid, D. Probst, W. H. Green and G. K. H. Madsen. 
 
 ### News
 
