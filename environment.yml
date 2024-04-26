@@ -9,6 +9,7 @@ dependencies:
   - numpy
   - pip
   - rdkit
+  - cirpy
   - pandas=2
   - joblib
   - jupyter
